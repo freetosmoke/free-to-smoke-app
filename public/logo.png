@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Cerchio principale -->
+  <circle cx="100" cy="100" r="80" fill="#3ABAB4" />
+  
+  <!-- Cerchio interno -->
+  <circle cx="100" cy="100" r="65" fill="#1F2937" />
+  
+  <!-- Stella -->
+  <path d="M100,50 L110,80 L140,80 L115,100 L125,130 L100,110 L75,130 L85,100 L60,80 L90,80 Z" fill="#3ABAB4" />
+  
+  <!-- Testo "LOYALTY" -->
+  <text x="100" y="150" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="white">LOYALTY</text>
+</svg>
