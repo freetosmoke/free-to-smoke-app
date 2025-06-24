@@ -1836,15 +1836,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                 <div className="space-y-3">
                   <h4 className="text-gray-300 font-medium">Livelli Clienti</h4>
                   <div className="space-y-2">
-                    {[0, 1, 2, 3, 4].map(level => {
-                      // Utilizziamo direttamente l'indice per trovare i clienti di quel livello
-                      const levelConfig = LEVEL_CONFIGS[level];
+                    {LEVEL_CONFIGS.map((levelConfig, index) => {
+                      // Filtriamo i clienti che appartengono a questo livello
                       const customersAtLevel = customers.filter(c => 
-                        c.points >= levelConfig.minPoints && c.points <= levelConfig.maxPoints
+                        c.points >= levelConfig.minPoints && 
+                        (index === LEVEL_CONFIGS.length - 1 || c.points < LEVEL_CONFIGS[index + 1].minPoints)
                       );
                       
                       return (
-                        <div key={level} className="flex justify-between text-sm">
+                        <div key={index} className="flex justify-between text-sm">
                           <span className="text-gray-400">{levelConfig.name}:</span>
                           <span className="text-white font-medium">
                             {customersAtLevel.length}
