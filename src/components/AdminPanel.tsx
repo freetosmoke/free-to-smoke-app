@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Plus, Minus, Users, Gift, Settings, Bell, Mail, Lock, Eye, EyeOff, X, Shield } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Users, Gift, Settings, Bell, Mail, Lock, Eye, EyeOff, X, Shield, BarChart } from 'lucide-react';
 import { sanitizeInput } from '../utils/security';
 import { generateCsrfToken, validateCsrfToken, setupSecurityProtections, rateLimiter } from '../utils/security';
 import { validatePasswordStrength, authenticateAdmin, isAdmin, logout } from '../utils/auth';
@@ -35,7 +35,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<'customers' | 'add-customer' | 'prizes' | 'notifications' | 'settings'>('customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'add-customer' | 'prizes' | 'notifications' | 'statistics' | 'settings'>('customers');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -811,6 +811,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
             Notifiche
           </button>
           <button
+            onClick={() => setActiveTab('statistics')}
+            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'statistics'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <BarChart className="w-4 h-4 mr-2" />
+            Statistiche
+          </button>
+          <button
             onClick={() => setActiveTab('settings')}
             className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'settings'
@@ -1534,6 +1545,207 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Statistics Tab */}
+        {activeTab === 'statistics' && (
+          <div className="space-y-6">
+            {/* Statistics Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Total Customers */}
+              <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 backdrop-blur-sm border border-blue-500/30 rounded-2xl p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-300 text-sm font-medium">Clienti Totali</p>
+                    <p className="text-white text-3xl font-bold mt-2">{customers.length}</p>
+                  </div>
+                  <div className="bg-blue-500/20 p-3 rounded-xl">
+                    <Users className="w-8 h-8 text-blue-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Average Points */}
+              <div className="bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-sm border border-green-500/30 rounded-2xl p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-300 text-sm font-medium">Media Punti</p>
+                    <p className="text-white text-3xl font-bold mt-2">
+                      {customers.length > 0 
+                        ? Math.round(customers.reduce((sum, customer) => sum + customer.points, 0) / customers.length)
+                        : 0
+                      }
+                    </p>
+                  </div>
+                  <div className="bg-green-500/20 p-3 rounded-xl">
+                    <BarChart className="w-8 h-8 text-green-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Prizes Redeemed */}
+              <div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 backdrop-blur-sm border border-purple-500/30 rounded-2xl p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-300 text-sm font-medium">Premi Riscattati</p>
+                    <p className="text-white text-3xl font-bold mt-2">
+                      {getTransactions().filter(t => t.type === 'redeem').length}
+                    </p>
+                  </div>
+                  <div className="bg-purple-500/20 p-3 rounded-xl">
+                    <Gift className="w-8 h-8 text-purple-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Notifications Sent */}
+              <div className="bg-gradient-to-br from-yellow-600/20 to-yellow-800/20 backdrop-blur-sm border border-yellow-500/30 rounded-2xl p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-yellow-300 text-sm font-medium">Notifiche Inviate</p>
+                    <p className="text-white text-3xl font-bold mt-2">{notificationHistory.length}</p>
+                  </div>
+                  <div className="bg-yellow-500/20 p-3 rounded-xl">
+                    <Bell className="w-8 h-8 text-yellow-400" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Registrations Chart */}
+              <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Registrazioni Ultimi 30 Giorni</h3>
+                <div className="h-64 flex items-center justify-center">
+                  <div className="text-center">
+                    <BarChart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-400">Grafico registrazioni</p>
+                    <p className="text-gray-500 text-sm mt-2">
+                      {(() => {
+                        const thirtyDaysAgo = new Date();
+                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                        const recentRegistrations = customers.filter(customer => 
+                          new Date(customer.registrationDate || customer.birthDate) >= thirtyDaysAgo
+                        );
+                        return `${recentRegistrations.length} nuove registrazioni`;
+                      })()} 
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Points Distribution Chart */}
+              <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Distribuzione Punti</h3>
+                <div className="h-64 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="bg-gray-700/50 p-3 rounded-lg">
+                        <p className="text-gray-300">0-100 punti</p>
+                        <p className="text-white font-bold">
+                          {customers.filter(c => c.points >= 0 && c.points <= 100).length}
+                        </p>
+                      </div>
+                      <div className="bg-gray-700/50 p-3 rounded-lg">
+                        <p className="text-gray-300">101-500 punti</p>
+                        <p className="text-white font-bold">
+                          {customers.filter(c => c.points > 100 && c.points <= 500).length}
+                        </p>
+                      </div>
+                      <div className="bg-gray-700/50 p-3 rounded-lg">
+                        <p className="text-gray-300">501-1000 punti</p>
+                        <p className="text-white font-bold">
+                          {customers.filter(c => c.points > 500 && c.points <= 1000).length}
+                        </p>
+                      </div>
+                      <div className="bg-gray-700/50 p-3 rounded-lg">
+                        <p className="text-gray-300">1000+ punti</p>
+                        <p className="text-white font-bold">
+                          {customers.filter(c => c.points > 1000).length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Additional Statistics */}
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Statistiche Dettagliate</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-3">
+                  <h4 className="text-gray-300 font-medium">Transazioni</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Punti aggiunti:</span>
+                      <span className="text-green-400">
+                        {getTransactions().filter(t => t.type === 'earn').length}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Punti riscattati:</span>
+                      <span className="text-red-400">
+                        {getTransactions().filter(t => t.type === 'redeem').length}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Totale transazioni:</span>
+                      <span className="text-white font-medium">
+                        {getTransactions().length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-gray-300 font-medium">Premi</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Premi attivi:</span>
+                      <span className="text-green-400">
+                        {prizes.filter(p => p.isActive).length}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Premi totali:</span>
+                      <span className="text-white font-medium">
+                        {prizes.length}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Punti medi richiesti:</span>
+                      <span className="text-blue-400">
+                        {prizes.length > 0 
+                          ? Math.round(prizes.reduce((sum, prize) => sum + prize.pointsRequired, 0) / prizes.length)
+                          : 0
+                        }
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-gray-300 font-medium">Livelli Clienti</h4>
+                  <div className="space-y-2">
+                    {[0, 1, 2, 3, 4].map(level => {
+                      const customersAtLevel = customers.filter(c => getUserLevel(c.points).level === level);
+                      const levelConfig = LEVEL_CONFIGS[level];
+                      return (
+                        <div key={level} className="flex justify-between text-sm">
+                          <span className="text-gray-400">{levelConfig.name}:</span>
+                          <span className="text-white font-medium">
+                            {customersAtLevel.length}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
