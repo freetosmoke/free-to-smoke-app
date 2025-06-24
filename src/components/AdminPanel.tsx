@@ -1,5 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Search, Plus, Minus, Users, Gift, Settings, Bell, Mail, Lock, Eye, EyeOff, X, Shield, BarChart } from 'lucide-react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  PointElement,
+} from 'chart.js';
+import { Bar, Line } from 'react-chartjs-2';
+
+// Registrazione dei componenti Chart.js
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  PointElement
+);
 import { sanitizeInput } from '../utils/security';
 import { generateCsrfToken, validateCsrfToken, setupSecurityProtections, rateLimiter } from '../utils/security';
 import { validatePasswordStrength, authenticateAdmin, isAdmin, logout } from '../utils/auth';
@@ -1620,56 +1644,134 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
               {/* Registrations Chart */}
               <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Registrazioni Ultimi 30 Giorni</h3>
-                <div className="h-64 flex items-center justify-center">
-                  <div className="text-center">
-                    <BarChart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-400">Grafico registrazioni</p>
-                    <p className="text-gray-500 text-sm mt-2">
-                      {(() => {
-                        const thirtyDaysAgo = new Date();
-                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                        const recentRegistrations = customers.filter(customer => 
-                          new Date(customer.registrationDate || customer.birthDate) >= thirtyDaysAgo
-                        );
-                        return `${recentRegistrations.length} nuove registrazioni`;
-                      })()} 
-                    </p>
-                  </div>
+                <div className="h-64">
+                  <Line
+                    data={{
+                      labels: (() => {
+                        const labels = [];
+                        for (let i = 29; i >= 0; i--) {
+                          const date = new Date();
+                          date.setDate(date.getDate() - i);
+                          labels.push(date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
+                        }
+                        return labels;
+                      })(),
+                      datasets: [{
+                        label: 'Registrazioni',
+                        data: (() => {
+                          const data = [];
+                          for (let i = 29; i >= 0; i--) {
+                            const date = new Date();
+                            date.setDate(date.getDate() - i);
+                            const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                            const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+                            const registrationsOnDay = customers.filter(customer => {
+                              const regDate = new Date(customer.registrationDate || customer.birthDate);
+                              return regDate >= dayStart && regDate < dayEnd;
+                            }).length;
+                            data.push(registrationsOnDay);
+                          }
+                          return data;
+                        })(),
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                      }]
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          labels: {
+                            color: 'white'
+                          }
+                        }
+                      },
+                      scales: {
+                        x: {
+                          ticks: {
+                            color: 'rgb(156, 163, 175)'
+                          },
+                          grid: {
+                            color: 'rgba(156, 163, 175, 0.1)'
+                          }
+                        },
+                        y: {
+                          ticks: {
+                            color: 'rgb(156, 163, 175)'
+                          },
+                          grid: {
+                            color: 'rgba(156, 163, 175, 0.1)'
+                          }
+                        }
+                      }
+                    }}
+                  />
                 </div>
               </div>
 
               {/* Points Distribution Chart */}
               <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">Distribuzione Punti</h3>
-                <div className="h-64 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="bg-gray-700/50 p-3 rounded-lg">
-                        <p className="text-gray-300">0-100 punti</p>
-                        <p className="text-white font-bold">
-                          {customers.filter(c => c.points >= 0 && c.points <= 100).length}
-                        </p>
-                      </div>
-                      <div className="bg-gray-700/50 p-3 rounded-lg">
-                        <p className="text-gray-300">101-500 punti</p>
-                        <p className="text-white font-bold">
-                          {customers.filter(c => c.points > 100 && c.points <= 500).length}
-                        </p>
-                      </div>
-                      <div className="bg-gray-700/50 p-3 rounded-lg">
-                        <p className="text-gray-300">501-1000 punti</p>
-                        <p className="text-white font-bold">
-                          {customers.filter(c => c.points > 500 && c.points <= 1000).length}
-                        </p>
-                      </div>
-                      <div className="bg-gray-700/50 p-3 rounded-lg">
-                        <p className="text-gray-300">1000+ punti</p>
-                        <p className="text-white font-bold">
-                          {customers.filter(c => c.points > 1000).length}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                <div className="h-64">
+                  <Bar
+                    data={{
+                      labels: ['0-100', '101-500', '501-1000', '1000+'],
+                      datasets: [{
+                        label: 'Numero Clienti',
+                        data: [
+                          customers.filter(c => c.points >= 0 && c.points <= 100).length,
+                          customers.filter(c => c.points > 100 && c.points <= 500).length,
+                          customers.filter(c => c.points > 500 && c.points <= 1000).length,
+                          customers.filter(c => c.points > 1000).length
+                        ],
+                        backgroundColor: [
+                          'rgba(34, 197, 94, 0.8)',
+                          'rgba(59, 130, 246, 0.8)',
+                          'rgba(168, 85, 247, 0.8)',
+                          'rgba(251, 191, 36, 0.8)'
+                        ],
+                        borderColor: [
+                          'rgb(34, 197, 94)',
+                          'rgb(59, 130, 246)',
+                          'rgb(168, 85, 247)',
+                          'rgb(251, 191, 36)'
+                        ],
+                        borderWidth: 1
+                      }]
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          labels: {
+                            color: 'white'
+                          }
+                        }
+                      },
+                      scales: {
+                        x: {
+                          ticks: {
+                            color: 'rgb(156, 163, 175)'
+                          },
+                          grid: {
+                            color: 'rgba(156, 163, 175, 0.1)'
+                          }
+                        },
+                        y: {
+                          ticks: {
+                            color: 'rgb(156, 163, 175)'
+                          },
+                          grid: {
+                            color: 'rgba(156, 163, 175, 0.1)'
+                          }
+                        }
+                      }
+                    }}
+                  />
                 </div>
               </div>
             </div>
