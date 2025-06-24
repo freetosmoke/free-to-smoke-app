@@ -15,6 +15,7 @@ import {
   getNotifications, 
   saveNotifications,
   addTransaction,
+  getTransactions,
 
   setAdminAuth,
   validateAdminCredentials,
@@ -414,7 +415,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       customerId: selectedCustomer.id,
       points: type === 'add' ? points : -points,
       type,
-      description: type === 'add' ? `Punti aggiunti dall'admin` : `Punti riscattati dall'admin`,
+      description: type === 'add' ? `Punti aggiunti manualmente dall'amministratore` : `Punti riscattati manualmente dall'amministratore`,
       timestamp: new Date().toISOString()
     };
     addTransaction(transaction);
@@ -893,6 +894,80 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                     <Minus className="w-4 h-4" />
                     <span>Riscatta</span>
                   </button>
+                </div>
+                
+                {/* Transaction History */}
+                <div className="mt-6 border-t border-gray-700 pt-4">
+                  <h4 className="text-md font-semibold text-white mb-3 flex items-center space-x-2">
+                    <span>📊</span>
+                    <span>Storico Transazioni</span>
+                  </h4>
+                  <div className="max-h-64 overflow-y-auto space-y-2">
+                    {getTransactions()
+                      .filter(transaction => transaction.customerId === selectedCustomer.id)
+                      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                      .map(transaction => {
+                        const date = new Date(transaction.timestamp);
+                        const formattedDate = date.toLocaleDateString('it-IT', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                        
+                        return (
+                          <div
+                            key={transaction.id}
+                            className={`p-3 rounded-lg border ${
+                              transaction.type === 'add'
+                                ? 'bg-green-900/20 border-green-500/30'
+                                : 'bg-red-900/20 border-red-500/30'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <span className={`text-sm font-medium ${
+                                    transaction.type === 'add' ? 'text-green-400' : 'text-red-400'
+                                  }`}>
+                                    {transaction.type === 'add' ? '+ ' : '- '}
+                                    {Math.abs(transaction.points)} punti
+                                  </span>
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    transaction.type === 'add'
+                                      ? 'bg-green-500/20 text-green-300'
+                                      : 'bg-red-500/20 text-red-300'
+                                  }`}>
+                                    {transaction.type === 'add' ? 'Aggiunta' : 'Riscatto'}
+                                  </span>
+                                </div>
+                                <p className="text-gray-400 text-sm mt-1">
+                                  {transaction.description}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-gray-300 text-xs">
+                                  {formattedDate}
+                                </p>
+                                <p className="text-gray-500 text-xs mt-1">
+                                  Admin
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    }
+                    {getTransactions().filter(transaction => transaction.customerId === selectedCustomer.id).length === 0 && (
+                      <div className="text-center py-8">
+                        <div className="text-gray-500 text-sm">
+                          <span className="text-2xl mb-2 block">📝</span>
+                          Nessuna transazione registrata
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Delete Customer Button */}
