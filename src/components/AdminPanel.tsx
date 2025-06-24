@@ -1665,7 +1665,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                             date.setDate(date.getDate() - i);
                             const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
                             const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
-                            const registrationsOnDay = customers.filter(customer => {
+                            const registrationsOnDay = customers.filter(() => {
                               // Simuliamo una data di registrazione casuale negli ultimi 30 giorni
                               const regDate = new Date();
                               regDate.setDate(regDate.getDate() - Math.floor(Math.random() * 30));
@@ -1837,11 +1837,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                   <h4 className="text-gray-300 font-medium">Livelli Clienti</h4>
                   <div className="space-y-2">
                     {[0, 1, 2, 3, 4].map(level => {
-                      const customersAtLevel = customers.filter(c => {
-                        const userLevel = getUserLevel(c.points);
-                        return LEVEL_CONFIGS.findIndex(config => config.name === userLevel.name) === level;
-                      });
+                      // Utilizziamo direttamente l'indice per trovare i clienti di quel livello
                       const levelConfig = LEVEL_CONFIGS[level];
+                      const customersAtLevel = customers.filter(c => 
+                        c.points >= levelConfig.minPoints && c.points <= levelConfig.maxPoints
+                      );
+                      
                       return (
                         <div key={level} className="flex justify-between text-sm">
                           <span className="text-gray-400">{levelConfig.name}:</span>
