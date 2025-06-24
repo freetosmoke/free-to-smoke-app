@@ -67,7 +67,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     firstName: '',
     lastName: '',
     email: '',
-    phone: '',
+    phone: '+39',
     birthDate: ''
   });
 
@@ -577,11 +577,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       phone: customerForm.phone.replace(/\s/g, ''),
       birthDate: customerForm.birthDate,
       points: 0, // Start with 0 points
-      registrationDate: new Date().toISOString()
+      createdAt: new Date().toISOString() // Using createdAt instead of registrationDate to match Customer type
     };
 
     // Save customer
-    saveCustomer(newCustomer);
+const updatedCustomers = [...customers, newCustomer];
+setCustomers(updatedCustomers);
+localStorage.setItem('customers', JSON.stringify(updatedCustomers));
     setCustomers(getCustomers());
     
     // Reset form
@@ -589,7 +591,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       firstName: '',
       lastName: '',
       email: '',
-      phone: '',
+      phone: '+39',
       birthDate: ''
     });
 
@@ -1016,14 +1018,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                     <label className="block text-gray-300 text-sm font-medium mb-2">
                       Numero di Cellulare <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="tel"
-                      value={customerForm.phone}
-                      onChange={(e) => setCustomerForm(prev => ({ ...prev, phone: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="es. 3331234567 o +393331234567"
-                      required
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-gray-400 text-sm">+39</span>
+                      <input
+                        type="tel"
+                        value={customerForm.phone.replace('+39', '')}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setCustomerForm(prev => ({ ...prev, phone: '+39' + value }));
+                        }}
+                        className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="3331234567"
+                        maxLength={10}
+                        pattern="[0-9]{10}"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
                 
