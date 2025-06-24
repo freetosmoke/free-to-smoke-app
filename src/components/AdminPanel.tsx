@@ -7,6 +7,7 @@ import { logSecurityEvent, SecurityEventType } from '../utils/securityLogger';
 import { Customer, Prize, Notification, PointTransaction } from '../types';
 import { 
   getCustomers, 
+  addCustomer,
   updateCustomer, 
   deleteCustomer,
   getPrizes, 
@@ -581,9 +582,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     };
 
     // Save customer
-const updatedCustomers = [...customers, newCustomer];
-setCustomers(updatedCustomers);
-localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+    addCustomer(newCustomer);
     setCustomers(getCustomers());
     
     // Reset form
