@@ -4,7 +4,7 @@ import { sanitizeInput } from '../utils/security';
 import { generateCsrfToken, validateCsrfToken, setupSecurityProtections, rateLimiter } from '../utils/security';
 import { validatePasswordStrength, authenticateAdmin, isAdmin, logout } from '../utils/auth';
 import { logSecurityEvent, SecurityEventType } from '../utils/securityLogger';
-import { Customer, Prize, Notification, PointTransaction } from '../types';
+import { Customer, Prize, Notification, NotificationHistory, PointTransaction } from '../types';
 import { 
   getCustomers, 
   addCustomer,
@@ -14,6 +14,8 @@ import {
   savePrizes, 
   getNotifications, 
   saveNotifications,
+  getNotificationHistory,
+  addNotificationToHistory,
   addTransaction,
   getTransactions,
 
@@ -37,6 +39,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationHistory, setNotificationHistory] = useState<NotificationHistory[]>([]);
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [pointsInput, setPointsInput] = useState('');
@@ -220,6 +224,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
         setCustomers(getCustomers());
         setPrizes(getPrizes());
         setNotifications(getNotifications());
+        setNotificationHistory(getNotificationHistory());
       } else {
         // Incrementa i tentativi falliti
         const newAttempts = loginAttempts + 1;
@@ -502,8 +507,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     setNotifications(updatedNotifications);
     saveNotifications(updatedNotifications);
     
+    // Aggiungi la notifica allo storico (inviata a tutti i clienti)
+    const allCustomers = getCustomers();
+    const historyEntry: NotificationHistory = {
+      id: `history_${Date.now()}`,
+      notificationId: newNotification.id,
+      title: newNotification.title,
+      message: newNotification.message,
+      type: newNotification.type,
+      recipients: allCustomers.map(c => c.id),
+      recipientNames: allCustomers.map(c => `${c.firstName} ${c.lastName}`),
+      sentAt: new Date().toISOString(),
+      sentBy: 'Amministratore'
+    };
+    
+    addNotificationToHistory(historyEntry);
+    setNotificationHistory(prev => [...prev, historyEntry]);
+    
     setNotificationForm({ title: '', message: '', type: 'info', isActive: true });
-    setToast({ message: 'Notifica aggiunta con successo', type: 'success', isVisible: true });
+    setToast({ message: 'Notifica aggiunta e inviata con successo', type: 'success', isVisible: true });
   };
 
   const handleAddCustomer = (e: React.FormEvent) => {
@@ -1030,6 +1052,109 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Notification History */}
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-white">Storico Notifiche Inviate</h3>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Cerca per titolo, messaggio o destinatario..."
+                    value={historySearchTerm}
+                    onChange={(e) => setHistorySearchTerm(e.target.value)}
+                    className="bg-gray-800 border border-gray-600 rounded-xl py-2 pl-10 pr-4 text-white text-sm w-80"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {notificationHistory
+                  .filter(history => 
+                    historySearchTerm === '' ||
+                    history.title.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+                    history.message.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+                    history.recipientNames.some(name => 
+                      name.toLowerCase().includes(historySearchTerm.toLowerCase())
+                    )
+                  )
+                  .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
+                  .map(history => (
+                    <div
+                      key={history.id}
+                      className="p-4 rounded-xl bg-gray-700/30 border border-gray-600/50"
+                    >
+                      <div className="flex items-start">
+                        <div className={`w-2 h-2 rounded-full mt-2 mr-3 ${
+                          history.type === 'promo' ? 'bg-yellow-400' :
+                          history.type === 'offer' ? 'bg-green-400' : 'bg-blue-400'
+                        }`}></div>
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h4 className="font-semibold text-white">{history.title}</h4>
+                              <p className="text-gray-300 text-sm mt-1">{history.message}</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs text-gray-400">
+                                {new Date(history.sentAt).toLocaleDateString('it-IT', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </div>
+                              <div className="text-xs text-blue-400">
+                                Tipo: {history.type === 'info' ? 'Informazione' : 
+                                      history.type === 'promo' ? 'Promozione' : 'Offerta'}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="border-t border-gray-600/50 pt-2 mt-2">
+                            <div className="flex justify-between items-center text-xs">
+                              <div className="text-gray-400">
+                                <span className="font-medium">Inviato da:</span> {history.sentBy}
+                              </div>
+                              <div className="text-gray-400">
+                                <span className="font-medium">Destinatari:</span> {history.recipients.length} clienti
+                              </div>
+                            </div>
+                            
+                            {history.recipientNames.length > 0 && (
+                              <div className="mt-2">
+                                <div className="text-xs text-gray-500 mb-1">Lista destinatari:</div>
+                                <div className="text-xs text-gray-400 max-h-20 overflow-y-auto">
+                                  {history.recipientNames.slice(0, 10).join(', ')}
+                                  {history.recipientNames.length > 10 && (
+                                    <span className="text-gray-500"> e altri {history.recipientNames.length - 10}...</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                }
+                
+                {notificationHistory.filter(history => 
+                  historySearchTerm === '' ||
+                  history.title.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+                  history.message.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+                  history.recipientNames.some(name => 
+                    name.toLowerCase().includes(historySearchTerm.toLowerCase())
+                  )
+                ).length === 0 && (
+                  <div className="text-center py-8 text-gray-400">
+                    {historySearchTerm ? 'Nessuna notifica trovata per la ricerca corrente' : 'Nessuna notifica inviata ancora'}
+                  </div>
+                )}
               </div>
             </div>
           </div>

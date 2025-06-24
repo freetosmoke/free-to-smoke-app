@@ -1,4 +1,4 @@
-import { Customer, Prize, Notification, PointTransaction } from '../types';
+import type { Customer, Prize, Notification, NotificationHistory, PointTransaction } from '../types';
 import { encrypt, decrypt, hashPassword, verifyPassword } from './crypto';
 import { sanitizeObject } from './security';
 import { logSecurityEvent, SecurityEventType } from './securityLogger';
@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   CUSTOMERS: 'freetosmoke_customers',
   PRIZES: 'freetosmoke_prizes',
   NOTIFICATIONS: 'freetosmoke_notifications',
+  NOTIFICATION_HISTORY: 'freetosmoke_notification_history',
   TRANSACTIONS: 'freetosmoke_transactions',
   ADMIN_AUTH: 'freetosmoke_admin_auth',
   ADMIN_CREDENTIALS: 'freetosmoke_admin_credentials'
@@ -153,6 +154,36 @@ export const saveNotifications = (notifications: Notification[]): void => {
   } catch (error) {
     console.error('Errore durante il salvataggio delle notifiche:', error);
   }
+};
+
+// Notification History operations con crittografia
+export const getNotificationHistory = (): NotificationHistory[] => {
+  const encryptedHistory = localStorage.getItem(STORAGE_KEYS.NOTIFICATION_HISTORY);
+  if (!encryptedHistory) return [];
+  
+  try {
+    const decryptedData = decrypt(encryptedHistory);
+    return JSON.parse(decryptedData);
+  } catch (error) {
+    console.error('Errore durante il recupero dello storico notifiche:', error);
+    return [];
+  }
+};
+
+export const saveNotificationHistory = (history: NotificationHistory[]): void => {
+  try {
+    const sanitizedHistory = sanitizeObject(history);
+    const encryptedData = encrypt(JSON.stringify(sanitizedHistory));
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATION_HISTORY, encryptedData);
+  } catch (error) {
+    console.error('Errore durante il salvataggio dello storico notifiche:', error);
+  }
+};
+
+export const addNotificationToHistory = (historyEntry: NotificationHistory): void => {
+  const currentHistory = getNotificationHistory();
+  currentHistory.push(historyEntry);
+  saveNotificationHistory(currentHistory);
 };
 
 // Transaction operations con crittografia

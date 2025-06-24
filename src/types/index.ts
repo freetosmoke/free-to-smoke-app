@@ -30,6 +30,18 @@ export interface Notification {
   isActive: boolean;
 }
 
+export interface NotificationHistory {
+  id: string;
+  notificationId: string;
+  title: string;
+  message: string;
+  type: 'info' | 'promo' | 'offer';
+  recipients: string[]; // Array of customer IDs
+  recipientNames: string[]; // Array of customer names for display
+  sentAt: string;
+  sentBy: string; // Admin identifier
+}
+
 export interface PointTransaction {
   id: string;
   customerId: string;
