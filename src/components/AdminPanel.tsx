@@ -31,7 +31,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<'customers' | 'prizes' | 'notifications' | 'settings'>('customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'add-customer' | 'prizes' | 'notifications' | 'settings'>('customers');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -60,6 +60,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     message: '',
     type: 'info' as 'info' | 'promo' | 'offer',
     isActive: true
+  });
+
+  // Add Customer Form State
+  const [customerForm, setCustomerForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    birthDate: ''
   });
 
   // Settings form state
@@ -495,6 +504,105 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     setToast({ message: 'Notifica aggiunta con successo', type: 'success', isVisible: true });
   };
 
+  const handleAddCustomer = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate required fields
+    if (!customerForm.firstName || !customerForm.lastName || !customerForm.email || !customerForm.phone || !customerForm.birthDate) {
+      setToast({
+        message: 'Compila tutti i campi obbligatori',
+        type: 'error',
+        isVisible: true
+      });
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(customerForm.email)) {
+      setToast({
+        message: 'Inserisci un indirizzo email valido',
+        type: 'error',
+        isVisible: true
+      });
+      return;
+    }
+
+    // Validate phone format (Italian mobile)
+    const phoneRegex = /^[+]?[0-9]{10,15}$/;
+    if (!phoneRegex.test(customerForm.phone.replace(/\s/g, ''))) {
+      setToast({
+        message: 'Inserisci un numero di cellulare valido',
+        type: 'error',
+        isVisible: true
+      });
+      return;
+    }
+
+    // Check for duplicate email
+    const existingCustomers = getCustomers();
+    const emailExists = existingCustomers.some(customer => 
+      customer.email.toLowerCase() === customerForm.email.toLowerCase()
+    );
+    
+    if (emailExists) {
+      setToast({
+        message: 'Esiste già un cliente con questa email',
+        type: 'error',
+        isVisible: true
+      });
+      return;
+    }
+
+    // Check for duplicate phone
+    const phoneExists = existingCustomers.some(customer => 
+      customer.phone.replace(/\s/g, '') === customerForm.phone.replace(/\s/g, '')
+    );
+    
+    if (phoneExists) {
+      setToast({
+        message: 'Esiste già un cliente con questo numero di cellulare',
+        type: 'error',
+        isVisible: true
+      });
+      return;
+    }
+
+    // Create new customer
+    const newCustomer: Customer = {
+      id: Date.now().toString(),
+      firstName: customerForm.firstName.trim(),
+      lastName: customerForm.lastName.trim(),
+      email: customerForm.email.toLowerCase().trim(),
+      phone: customerForm.phone.replace(/\s/g, ''),
+      birthDate: customerForm.birthDate,
+      points: 0, // Start with 0 points
+      registrationDate: new Date().toISOString()
+    };
+
+    // Save customer
+    saveCustomer(newCustomer);
+    setCustomers(getCustomers());
+    
+    // Reset form
+    setCustomerForm({
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      birthDate: ''
+    });
+
+    setToast({
+      message: `Cliente ${newCustomer.firstName} ${newCustomer.lastName} aggiunto con successo`,
+      type: 'success',
+      isVisible: true
+    });
+
+    // Switch to customers tab to see the new customer
+    setActiveTab('customers');
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
@@ -644,6 +752,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
           >
             <Users className="w-4 h-4 mr-2" />
             Clienti
+          </button>
+          <button
+            onClick={() => setActiveTab('add-customer')}
+            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'add-customer'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Aggiungi Cliente
           </button>
           <button
             onClick={() => setActiveTab('prizes')}
@@ -836,6 +955,133 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Customer Tab */}
+        {activeTab === 'add-customer' && (
+          <div className="space-y-6">
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Aggiungi Nuovo Cliente</h3>
+              <p className="text-gray-300 text-sm mb-6">
+                Compila tutti i campi obbligatori per aggiungere un nuovo cliente. Il sistema verificherà automaticamente che email e cellulare non siano già registrati.
+              </p>
+              
+              <form onSubmit={handleAddCustomer} className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-300 text-sm font-medium mb-2">
+                      Nome <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customerForm.firstName}
+                      onChange={(e) => setCustomerForm(prev => ({ ...prev, firstName: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="es. Mario"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-300 text-sm font-medium mb-2">
+                      Cognome <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customerForm.lastName}
+                      onChange={(e) => setCustomerForm(prev => ({ ...prev, lastName: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="es. Rossi"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-300 text-sm font-medium mb-2">
+                      Email <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={customerForm.email}
+                      onChange={(e) => setCustomerForm(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="es. mario.rossi@email.com"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-300 text-sm font-medium mb-2">
+                      Numero di Cellulare <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={customerForm.phone}
+                      onChange={(e) => setCustomerForm(prev => ({ ...prev, phone: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="es. 3331234567 o +393331234567"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-gray-300 text-sm font-medium mb-2">
+                    Data di Nascita <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={customerForm.birthDate}
+                    onChange={(e) => setCustomerForm(prev => ({ ...prev, birthDate: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                
+                <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4">
+                  <div className="flex items-start">
+                    <div className="w-5 h-5 text-blue-400 mt-0.5 mr-3">
+                      ℹ️
+                    </div>
+                    <div>
+                      <h4 className="text-blue-300 font-medium mb-1">Informazioni</h4>
+                      <ul className="text-blue-200 text-sm space-y-1">
+                        <li>• Il cliente inizierà con 0 punti</li>
+                        <li>• Email e cellulare devono essere unici nel sistema</li>
+                        <li>• Tutti i campi sono obbligatori</li>
+                        <li>• Il formato del cellulare deve essere valido (10-15 cifre)</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex gap-4">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span>Aggiungi Cliente</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomerForm({
+                        firstName: '',
+                        lastName: '',
+                        email: '',
+                        phone: '',
+                        birthDate: ''
+                      });
+                    }}
+                    className="bg-gray-600 hover:bg-gray-700 text-white py-3 px-6 rounded-xl transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
