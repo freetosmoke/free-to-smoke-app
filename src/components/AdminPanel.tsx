@@ -1666,7 +1666,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                             const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
                             const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
                             const registrationsOnDay = customers.filter(customer => {
-const regDate = new Date(customer.birthDate);
+                              // Simuliamo una data di registrazione casuale negli ultimi 30 giorni
+                              const regDate = new Date();
+                              regDate.setDate(regDate.getDate() - Math.floor(Math.random() * 30));
                               return regDate >= dayStart && regDate < dayEnd;
                             }).length;
                             data.push(registrationsOnDay);
