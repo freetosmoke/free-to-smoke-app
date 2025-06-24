@@ -1666,7 +1666,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                             const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
                             const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
                             const registrationsOnDay = customers.filter(customer => {
-                              const regDate = new Date(customer.registrationDate || customer.birthDate);
+const regDate = new Date(customer.birthDate);
                               return regDate >= dayStart && regDate < dayEnd;
                             }).length;
                             data.push(registrationsOnDay);
@@ -1786,7 +1786,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Punti aggiunti:</span>
                       <span className="text-green-400">
-                        {getTransactions().filter(t => t.type === 'earn').length}
+                        {getTransactions().filter(t => t.type === 'add').length}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
@@ -1835,7 +1835,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                   <h4 className="text-gray-300 font-medium">Livelli Clienti</h4>
                   <div className="space-y-2">
                     {[0, 1, 2, 3, 4].map(level => {
-                      const customersAtLevel = customers.filter(c => getUserLevel(c.points).level === level);
+                      const customersAtLevel = customers.filter(c => {
+                        const userLevel = getUserLevel(c.points);
+                        return LEVEL_CONFIGS.findIndex(config => config.name === userLevel.name) === level;
+                      });
                       const levelConfig = LEVEL_CONFIGS[level];
                       return (
                         <div key={level} className="flex justify-between text-sm">
