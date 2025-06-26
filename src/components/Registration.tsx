@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, User, Mail, Phone, Calendar, Upload, X } from 'lucide-react';
-import { Customer } from '../types';
-import { addCustomer, findCustomerByEmail, findCustomerByPhone } from '../utils/storage';
+import { Customer, SecurityEventType } from '../types';
+import * as firebaseService from '../utils/firebase';
 import Toast from './Toast';
 import { sanitizeInput, sanitizeObject } from '../utils/security';
 import { generateCsrfToken, validateCsrfToken, setupSecurityProtections } from '../utils/security';
 import { validatePasswordStrength } from '../utils/auth';
-import { logSecurityEvent, SecurityEventType } from '../utils/securityLogger';
+import { logSecurityEvent } from '../utils/securityLogger';
 
 interface RegistrationProps {
   onNavigate: (page: string) => void;
@@ -53,7 +53,7 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
   });
 
   // Funzione per validare un singolo campo in tempo reale
-  const validateField = (name: string, value: string): string => {
+  const validateField = async (name: string, value: string): Promise<string> => {
     // Sanitizza l'input prima della validazione
     const sanitizedValue = sanitizeInput(value);
     
@@ -66,12 +66,22 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
         if (!sanitizedValue.trim()) return 'Email richiesta';
         if (!sanitizedValue.includes('@')) return 'Email non valida: deve contenere il simbolo @';
         if (!/\S+@\S+\.\S+/.test(sanitizedValue)) return 'Email non valida';
-        if (findCustomerByEmail(sanitizedValue)) return 'Email già registrata';
+        try {
+          const existingCustomer = await firebaseService.findCustomerByEmail(sanitizedValue);
+          if (existingCustomer) return 'Email già registrata';
+        } catch (error) {
+          console.error('Errore durante la verifica dell\'email:', error);
+        }
         return '';
       case 'phone':
         if (sanitizedValue.length <= 4) return 'Numero di cellulare richiesto';
         if (!/^\+39\s?[0-9]{10}$/.test(sanitizedValue)) return 'Numero non valido. Deve contenere il prefisso +39 seguito da 10 cifre';
-        if (findCustomerByPhone(sanitizedValue)) return 'Numero già registrato';
+        try {
+          const existingCustomer = await firebaseService.findCustomerByPhone(sanitizedValue);
+          if (existingCustomer) return 'Numero già registrato';
+        } catch (error) {
+          console.error('Errore durante la verifica del numero di telefono:', error);
+        }
         return '';
       case 'birthDate': {
         if (!sanitizedValue) return 'Data di nascita richiesta';
@@ -100,7 +110,7 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
     }
   };
 
-  const validateForm = (): boolean => {
+  const validateForm = async (): Promise<boolean> => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.firstName.trim()) newErrors.firstName = 'Nome richiesto';
@@ -112,16 +122,30 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
       newErrors.email = 'Email non valida: deve contenere il simbolo @';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email non valida';
-    } else if (findCustomerByEmail(formData.email)) {
-      newErrors.email = 'Email già registrata';
+    } else {
+      try {
+        const existingCustomer = await firebaseService.findCustomerByEmail(formData.email);
+        if (existingCustomer) {
+          newErrors.email = 'Email già registrata';
+        }
+      } catch (error) {
+        console.error('Errore durante la verifica dell\'email:', error);
+      }
     }
 
     if (!formData.phone.trim()) {
       newErrors.phone = 'Numero di cellulare richiesto';
     } else if (!/^\+39\s?[0-9]{10}$/.test(formData.phone)) {
       newErrors.phone = 'Numero non valido. Deve contenere il prefisso +39 seguito da 10 cifre';
-    } else if (findCustomerByPhone(formData.phone)) {
-      newErrors.phone = 'Numero già registrato';
+    } else {
+      try {
+        const existingCustomer = await firebaseService.findCustomerByPhone(formData.phone);
+        if (existingCustomer) {
+          newErrors.phone = 'Numero già registrato';
+        }
+      } catch (error) {
+        console.error('Errore durante la verifica del numero di telefono:', error);
+      }
     }
 
     if (!formData.birthDate) {
@@ -142,7 +166,7 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Verifica il token CSRF
@@ -165,7 +189,8 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
       setErrors(prev => ({ ...prev, termsAndConditions: 'Devi accettare i termini e condizioni' }));
     }
     
-    if (!validateForm()) {
+    const isValid = await validateForm();
+    if (!isValid) {
       setToast({
         message: 'Controlla i campi evidenziati in rosso',
         type: 'error',
@@ -188,12 +213,16 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
         birthDate: sanitizedFormData.birthDate,
         points: 0,
         createdAt: new Date().toISOString(),
-        profileImage: sanitizedFormData.profileImage || undefined,
         marketingConsent: sanitizedFormData.marketingConsent
       };
       
-      // Add customer to storage
-      addCustomer(newCustomer);
+      // Aggiungi profileImage solo se presente
+      if (sanitizedFormData.profileImage) {
+        newCustomer.profileImage = sanitizedFormData.profileImage;
+      }
+      
+      // Add customer to storage using Firebase
+      await firebaseService.addCustomer(newCustomer);
       
       // Registra l'evento di registrazione
       logSecurityEvent(SecurityEventType.REGISTRATION, newCustomer.id, 'Registrazione completata con successo');
@@ -263,8 +292,9 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
                   onChange={(e) => {
                     const value = e.target.value;
                     setFormData(prev => ({ ...prev, firstName: value }));
-                    const error = validateField('firstName', value);
-                    setRealTimeErrors(prev => ({ ...prev, firstName: error }));
+                    validateField('firstName', value).then(error => {
+                      setRealTimeErrors(prev => ({ ...prev, firstName: error }));
+                    });
                   }}
                   onBlur={() => setTouchedFields(prev => ({ ...prev, firstName: true }))}
                   className={`w-full bg-gray-800 border-2 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base ${
@@ -290,8 +320,9 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
                   onChange={(e) => {
                     const value = e.target.value;
                     setFormData(prev => ({ ...prev, lastName: value }));
-                    const error = validateField('lastName', value);
-                    setRealTimeErrors(prev => ({ ...prev, lastName: error }));
+                    validateField('lastName', value).then(error => {
+                      setRealTimeErrors(prev => ({ ...prev, lastName: error }));
+                    });
                   }}
                   onBlur={() => setTouchedFields(prev => ({ ...prev, lastName: true }))}
                   className={`w-full bg-gray-800 border-2 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base ${
@@ -315,10 +346,10 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
               <input
                 type="email"
                 value={formData.email}
-                onChange={(e) => {
+                onChange={async (e) => {
                   const value = e.target.value;
                   setFormData(prev => ({ ...prev, email: value }));
-                  const error = validateField('email', value);
+                  const error = await validateField('email', value);
                   setRealTimeErrors(prev => ({ ...prev, email: error }));
                 }}
                 onBlur={() => setTouchedFields(prev => ({ ...prev, email: true }))}
@@ -351,7 +382,9 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
                     if (input === '') {
                       formattedPhone = '+39 ';
                       setFormData(prev => ({ ...prev, phone: formattedPhone }));
-                      setRealTimeErrors(prev => ({ ...prev, phone: validateField('phone', formattedPhone) }));
+                      validateField('phone', formattedPhone).then(error => {
+                        setRealTimeErrors(prev => ({ ...prev, phone: error }));
+                      });
                       return;
                     }
                     
@@ -377,8 +410,9 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
                     }
                     
                     // Valida il numero di telefono in tempo reale
-                    const error = validateField('phone', formattedPhone);
-                    setRealTimeErrors(prev => ({ ...prev, phone: error }));
+                    validateField('phone', formattedPhone).then(error => {
+                      setRealTimeErrors(prev => ({ ...prev, phone: error }));
+                    });
                   }}
                   onBlur={() => setTouchedFields(prev => ({ ...prev, phone: true }))}
                   className={`w-full bg-gray-800 border-2 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base font-medium text-lg ${
@@ -404,13 +438,14 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
                 type="date"
                 value={formData.birthDate}
                 onChange={(e) => {
-                  const selectedDate = e.target.value;
-                  setFormData(prev => ({ ...prev, birthDate: selectedDate }));
-                  
-                  // Valida la data di nascita in tempo reale
-                  const error = validateField('birthDate', selectedDate);
-                  setRealTimeErrors(prev => ({ ...prev, birthDate: error }));
-                }}
+                    const selectedDate = e.target.value;
+                    setFormData(prev => ({ ...prev, birthDate: selectedDate }));
+                    
+                    // Valida la data di nascita in tempo reale
+                    validateField('birthDate', selectedDate).then(error => {
+                      setRealTimeErrors(prev => ({ ...prev, birthDate: error }));
+                    });
+                  }}
                 min="1920-01-01"
                 max={(() => {
                   const date = new Date();

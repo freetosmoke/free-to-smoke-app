@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Regole temporanee per lo sviluppo - permettono accesso completo
+    // ATTENZIONE: Non usare in produzione!
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

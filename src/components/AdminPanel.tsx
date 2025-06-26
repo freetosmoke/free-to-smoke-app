@@ -12,6 +12,15 @@ import {
   PointElement,
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import { sanitizeInput } from '../utils/security';
+import { generateCsrfToken, validateCsrfToken, setupSecurityProtections, rateLimiter } from '../utils/security';
+import { validatePasswordStrength, authenticateAdmin, isAdmin, logout } from '../utils/auth';
+import { logSecurityEvent } from '../utils/securityLogger';
+import { Customer, Prize, Notification, NotificationHistory, PointTransaction, SecurityEventType } from '../types';
+// Rimossi import da storage.ts - ora utilizziamo solo Firebase
+import * as firebaseService from '../utils/firebase';
+import { getUserLevel, LEVEL_CONFIGS } from '../utils/levels';
+import Toast from './Toast';
 
 // Registrazione dei componenti Chart.js
 ChartJS.register(
@@ -24,32 +33,6 @@ ChartJS.register(
   Legend,
   PointElement
 );
-import { sanitizeInput } from '../utils/security';
-import { generateCsrfToken, validateCsrfToken, setupSecurityProtections, rateLimiter } from '../utils/security';
-import { validatePasswordStrength, authenticateAdmin, isAdmin, logout } from '../utils/auth';
-import { logSecurityEvent, SecurityEventType } from '../utils/securityLogger';
-import { Customer, Prize, Notification, NotificationHistory, PointTransaction } from '../types';
-import { 
-  getCustomers, 
-  addCustomer,
-  updateCustomer, 
-  deleteCustomer,
-  getPrizes, 
-  savePrizes, 
-  getNotifications, 
-  saveNotifications,
-  getNotificationHistory,
-  addNotificationToHistory,
-  addTransaction,
-  getTransactions,
-
-  setAdminAuth,
-  validateAdminCredentials,
-  setAdminCredentials,
-  getAdminCredentials
-} from '../utils/storage';
-import { getUserLevel, LEVEL_CONFIGS } from '../utils/levels';
-import Toast from './Toast';
 
 interface AdminPanelProps {
   onNavigate: (page: string) => void;
@@ -64,6 +47,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationHistory, setNotificationHistory] = useState<NotificationHistory[]>([]);
+  const [transactions, setTransactions] = useState<PointTransaction[]>([]);
   const [historySearchTerm, setHistorySearchTerm] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -127,15 +111,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     setCsrfToken(token);
     
     // Check if admin is already authenticated
-    const isAuth = isAdmin();
-    setIsAuthenticated(isAuth);
+    const checkAuth = async () => {
+      const isAuth = await isAdmin();
+      setIsAuthenticated(isAuth);
+      
+      // Load data
+      if (isAuth) {
+        setCustomers(await firebaseService.getCustomers());
+        setPrizes(await firebaseService.getPrizes());
+        setNotifications(await firebaseService.getNotifications());
+        setTransactions(await firebaseService.getTransactions());
+      }
+    };
     
-    // Load data
-    if (isAuth) {
-      setCustomers(getCustomers());
-      setPrizes(getPrizes());
-      setNotifications(getNotifications());
-    }
+    checkAuth();
     
     // Controlla se l'admin è bloccato a causa di troppi tentativi
     const blockedUntil = localStorage.getItem('admin_login_blocked_until');
@@ -168,16 +157,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      setCustomers(getCustomers());
-      setPrizes(getPrizes());
-      setNotifications(getNotifications());
+      const loadData = async () => {
+        setCustomers(await firebaseService.getCustomers());
+        setPrizes(await firebaseService.getPrizes());
+        setNotifications(await firebaseService.getNotifications());
+        setTransactions(await firebaseService.getTransactions());
+      };
+      loadData();
       
       // Initialize settings form with current credentials
-      const credentials = getAdminCredentials();
-      setSettingsForm(prev => ({
-        ...prev,
-        newEmail: credentials.email
-      }));
+      const initializeSettings = async () => {
+        const credentials = await firebaseService.getAdminCredentials();
+        setSettingsForm(prev => ({
+          ...prev,
+          newEmail: credentials.email
+        }));
+      };
+      initializeSettings();
     }
   }, [isAuthenticated]);
 
@@ -225,7 +221,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     const sanitizedPassword = loginForm.password; // Non sanitizziamo la password per non alterarla
 
     try {
-      if (validateAdminCredentials(sanitizedEmail, sanitizedPassword)) {
+      if (await firebaseService.validateAdminCredentials(sanitizedEmail, sanitizedPassword)) {
         // Genera un token di autenticazione e lo salva
         const token = authenticateAdmin('admin');
         if (!token) {
@@ -233,7 +229,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
         }
         
         setIsAuthenticated(true);
-        setAdminAuth(true);
+        await firebaseService.setAdminAuth(true);
         
         // Reset dei tentativi di login
         setLoginAttempts(0);
@@ -245,10 +241,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
         setToast({ message: 'Accesso effettuato', type: 'success', isVisible: true });
         
         // Carica i dati
-        setCustomers(getCustomers());
-        setPrizes(getPrizes());
-        setNotifications(getNotifications());
-        setNotificationHistory(getNotificationHistory());
+        const loadData = async () => {
+          setCustomers(await firebaseService.getCustomers());
+          setPrizes(await firebaseService.getPrizes());
+          setNotifications(await firebaseService.getNotifications());
+          setNotificationHistory(await firebaseService.getNotificationHistory());
+          setTransactions(await firebaseService.getTransactions());
+        };
+        loadData();
       } else {
         // Incrementa i tentativi falliti
         const newAttempts = loginAttempts + 1;
@@ -290,9 +290,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsAuthenticated(false);
-    setAdminAuth(false);
+    await firebaseService.setAdminAuth(false);
     setLoginForm({ email: '', password: '' });
     setActiveTab('customers');
     
@@ -305,7 +305,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     onNavigate('home');
   };
 
-  const handleUpdateCredentials = (e: React.FormEvent) => {
+  const handleUpdateCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Verifica il token CSRF
@@ -331,7 +331,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     }
     
     // Validate current password
-    const currentCredentials = getAdminCredentials();
+    const currentCredentials = await firebaseService.getAdminCredentials();
     if (currentCredentials.password !== sanitizedCurrentPassword) {
       setToast({ message: 'Password attuale errata', type: 'error', isVisible: true });
       logSecurityEvent(SecurityEventType.PASSWORD_CHANGE_FAILURE, 'admin', 'Tentativo di modifica credenziali con password attuale errata');
@@ -361,7 +361,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     
     try {
       // Update credentials
-      setAdminCredentials(sanitizedNewEmail, sanitizedNewPassword);
+      await firebaseService.setAdminCredentials(sanitizedNewEmail, sanitizedNewPassword);
       
       // Registra la modifica delle credenziali
       logSecurityEvent(SecurityEventType.PASSWORD_CHANGE, 'admin', 'Credenziali amministratore aggiornate');
@@ -414,7 +414,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
        return sortOrder === 'desc' ? -comparison : comparison;
      });
 
-  const handlePointsOperation = (type: 'add' | 'redeem') => {
+  const handlePointsOperation = async (type: 'add' | 'redeem') => {
     if (!selectedCustomer || !pointsInput) {
       setToast({ message: 'Seleziona un cliente e inserisci i punti', type: 'error', isVisible: true });
       return;
@@ -436,21 +436,36 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       points: type === 'add' ? selectedCustomer.points + points : selectedCustomer.points - points
     };
 
-    updateCustomer(updatedCustomer);
-    
-    // Add transaction record
-    const transaction: PointTransaction = {
-      id: Date.now().toString(),
-      customerId: selectedCustomer.id,
-      points: type === 'add' ? points : -points,
-      type,
-      description: type === 'add' ? `Punti aggiunti manualmente dall'amministratore` : `Punti riscattati manualmente dall'amministratore`,
-      timestamp: new Date().toISOString()
-    };
-    addTransaction(transaction);
+    try {
+      // Update customer in Firebase
+      await firebaseService.updateCustomer(updatedCustomer);
+      
+      // Add transaction record
+      const transaction: PointTransaction = {
+        id: Date.now().toString(),
+        customerId: selectedCustomer.id,
+        points: type === 'add' ? points : -points,
+        type,
+        description: type === 'add' ? `Punti aggiunti manualmente dall'amministratore` : `Punti riscattati manualmente dall'amministratore`,
+        timestamp: new Date().toISOString()
+      };
+      await firebaseService.addTransaction(transaction);
 
-    setCustomers(getCustomers());
-    setSelectedCustomer(updatedCustomer);
+      // Refresh customer list and transactions from Firebase
+      const updatedCustomers = await firebaseService.getCustomers();
+      const updatedTransactions = await firebaseService.getTransactions();
+      setCustomers(updatedCustomers);
+      setTransactions(updatedTransactions);
+      setSelectedCustomer(updatedCustomer);
+    } catch (error) {
+      console.error('Errore durante l\'operazione sui punti:', error);
+      setToast({
+        message: 'Si è verificato un errore durante l\'operazione sui punti',
+        type: 'error',
+        isVisible: true
+      });
+      return;
+    }
     setPointsInput('');
     
     setToast({
@@ -460,7 +475,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     });
   };
 
-  const handleAddPrize = (e: React.FormEvent) => {
+  const handleAddPrize = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prizeForm.name || !prizeForm.description || !prizeForm.pointsRequired) {
       setToast({
@@ -482,7 +497,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     };
 
     const updatedPrizes = [...prizes, newPrize];
-    savePrizes(updatedPrizes);
+    await firebaseService.savePrizes(updatedPrizes);
     setPrizes(updatedPrizes);
     setPrizeForm({
       name: '',
@@ -511,7 +526,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     }
   };
 
-  const handleAddNotification = (e: React.FormEvent) => {
+  const handleAddNotification = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!notificationForm.title || !notificationForm.message) {
       setToast({ message: 'Compila tutti i campi', type: 'error', isVisible: true });
@@ -529,10 +544,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
 
     const updatedNotifications = [...notifications, newNotification];
     setNotifications(updatedNotifications);
-    saveNotifications(updatedNotifications);
+    await firebaseService.saveNotifications(updatedNotifications);
     
     // Aggiungi la notifica allo storico (inviata a tutti i clienti)
-    const allCustomers = getCustomers();
+    const allCustomers = customers;
     const historyEntry: NotificationHistory = {
       id: `history_${Date.now()}`,
       notificationId: newNotification.id,
@@ -545,14 +560,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       sentBy: 'Amministratore'
     };
     
-    addNotificationToHistory(historyEntry);
+    await firebaseService.addNotificationToHistory(historyEntry);
     setNotificationHistory(prev => [...prev, historyEntry]);
     
     setNotificationForm({ title: '', message: '', type: 'info', isActive: true });
     setToast({ message: 'Notifica aggiunta e inviata con successo', type: 'success', isVisible: true });
   };
 
-  const handleAddCustomer = (e: React.FormEvent) => {
+  const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate required fields
@@ -587,13 +602,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       return;
     }
 
-    // Check for duplicate email
-    const existingCustomers = getCustomers();
-    const emailExists = existingCustomers.some(customer => 
-      customer.email.toLowerCase() === customerForm.email.toLowerCase()
-    );
+    // Check for duplicate email using Firebase
+    const existingEmailCustomer = await firebaseService.findCustomerByEmail(customerForm.email.toLowerCase().trim());
     
-    if (emailExists) {
+    if (existingEmailCustomer) {
       setToast({
         message: 'Esiste già un cliente con questa email',
         type: 'error',
@@ -602,12 +614,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       return;
     }
 
-    // Check for duplicate phone
-    const phoneExists = existingCustomers.some(customer => 
-      customer.phone.replace(/\s/g, '') === customerForm.phone.replace(/\s/g, '')
-    );
+    // Check for duplicate phone using Firebase
+    const existingPhoneCustomer = await firebaseService.findCustomerByPhone(customerForm.phone.replace(/\s/g, ''));
     
-    if (phoneExists) {
+    if (existingPhoneCustomer) {
       setToast({
         message: 'Esiste già un cliente con questo numero di cellulare',
         type: 'error',
@@ -628,27 +638,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       createdAt: new Date().toISOString() // Using createdAt instead of registrationDate to match Customer type
     };
 
-    // Save customer
-    addCustomer(newCustomer);
-    setCustomers(getCustomers());
-    
-    // Reset form
-    setCustomerForm({
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '+39',
-      birthDate: ''
-    });
+    // Save customer to Firebase
+    try {
+      await firebaseService.addCustomer(newCustomer);
+      
+      // Refresh customer list from Firebase
+      const updatedCustomers = await firebaseService.getCustomers();
+      setCustomers(updatedCustomers);
+      
+      // Reset form
+      setCustomerForm({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '+39',
+        birthDate: ''
+      });
 
-    setToast({
-      message: `Cliente ${newCustomer.firstName} ${newCustomer.lastName} aggiunto con successo`,
-      type: 'success',
-      isVisible: true
-    });
+      setToast({
+        message: `Cliente ${newCustomer.firstName} ${newCustomer.lastName} aggiunto con successo`,
+        type: 'success',
+        isVisible: true
+      });
 
-    // Switch to customers tab to see the new customer
-    setActiveTab('customers');
+      // Switch to customers tab to see the new customer
+      setActiveTab('customers');
+    } catch (error) {
+      console.error('Errore durante l\'aggiunta del cliente:', error);
+      setToast({
+        message: 'Si è verificato un errore durante l\'aggiunta del cliente',
+        type: 'error',
+        isVisible: true
+      });
+    }
   };
 
   if (!isAuthenticated) {
@@ -960,7 +982,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                     <span>Storico Transazioni</span>
                   </h4>
                   <div className="max-h-64 overflow-y-auto space-y-2">
-                    {getTransactions()
+                    {transactions
                       .filter(transaction => transaction.customerId === selectedCustomer.id)
                       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                       .map(transaction => {
@@ -1016,7 +1038,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                         );
                       })
                     }
-                    {getTransactions().filter(transaction => transaction.customerId === selectedCustomer.id).length === 0 && (
+                    {transactions.filter(transaction => transaction.customerId === selectedCustomer.id).length === 0 && (
                       <div className="text-center py-8">
                         <div className="text-gray-500 text-sm">
                           <span className="text-2xl mb-2 block">📝</span>
@@ -1030,16 +1052,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                 {/* Delete Customer Button */}
                 <div className="mt-4 border-t border-gray-700 pt-4">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (window.confirm(`Sei sicuro di voler eliminare il cliente ${selectedCustomer.firstName} ${selectedCustomer.lastName}? Questa azione non può essere annullata.`)) {
-                        deleteCustomer(selectedCustomer.id);
-                        setCustomers(getCustomers());
-                        setSelectedCustomer(null);
-                        setToast({
-                          message: 'Cliente eliminato con successo',
-                          type: 'success',
-                          isVisible: true
-                        });
+                        try {
+                          await firebaseService.deleteCustomer(selectedCustomer.id);
+                          const updatedCustomers = await firebaseService.getCustomers();
+                          const updatedTransactions = await firebaseService.getTransactions();
+                          setCustomers(updatedCustomers);
+                          setTransactions(updatedTransactions);
+                          setSelectedCustomer(null);
+                          setToast({
+                            message: 'Cliente eliminato con successo',
+                            type: 'success',
+                            isVisible: true
+                          });
+                        } catch (error) {
+                          console.error('Errore durante l\'eliminazione del cliente:', error);
+                          setToast({
+                            message: 'Si è verificato un errore durante l\'eliminazione del cliente',
+                            type: 'error',
+                            isVisible: true
+                          });
+                        }
                       }
                     }}
                     className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl flex items-center justify-center space-x-2 transition-colors"
@@ -1616,7 +1650,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                   <div>
                     <p className="text-purple-300 text-sm font-medium">Premi Riscattati</p>
                     <p className="text-white text-3xl font-bold mt-2">
-                      {getTransactions().filter(t => t.type === 'redeem').length}
+                      {transactions.filter(t => t.type === 'redeem').length}
                     </p>
                   </div>
                   <div className="bg-purple-500/20 p-3 rounded-xl">
@@ -1788,19 +1822,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Punti aggiunti:</span>
                       <span className="text-green-400">
-                        {getTransactions().filter(t => t.type === 'add').length}
+                        {transactions.filter(t => t.type === 'add').length}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Punti riscattati:</span>
                       <span className="text-red-400">
-                        {getTransactions().filter(t => t.type === 'redeem').length}
+                        {transactions.filter(t => t.type === 'redeem').length}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Totale transazioni:</span>
                       <span className="text-white font-medium">
-                        {getTransactions().length}
+                        {transactions.length}
                       </span>
                     </div>
                   </div>

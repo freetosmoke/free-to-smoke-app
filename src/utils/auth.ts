@@ -1,20 +1,18 @@
 import { Customer } from '../types';
 import { generateToken, verifyToken } from './crypto';
+import * as firebaseService from './firebase';
 
-// Chiavi per il localStorage
-const AUTH_TOKEN_KEY = 'freetosmoke_auth_token';
-const SESSION_TIMEOUT_KEY = 'freetosmoke_session_timeout';
-const ADMIN_TOKEN_KEY = 'freetosmoke_admin_token';
+// Durata della sessione
 
 // Durata della sessione in millisecondi (30 minuti)
 const SESSION_DURATION = 30 * 60 * 1000;
 
 /**
- * Crea un token di autenticazione per un cliente e lo salva nel localStorage
+ * Crea un token di autenticazione per un cliente e lo salva in Firebase
  * @param customer - Il cliente da autenticare
  * @returns Il token generato
  */
-export const authenticateCustomer = (customer: Customer): string => {
+export const authenticateCustomer = async (customer: Customer): Promise<string> => {
   // Creiamo un payload con solo le informazioni necessarie (evitando dati sensibili)
   const payload = {
     id: customer.id,
@@ -24,33 +22,31 @@ export const authenticateCustomer = (customer: Customer): string => {
   // Generiamo il token con scadenza
   const token = generateToken(payload, SESSION_DURATION);
   
-  // Salviamo il token nel localStorage
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
-  
   // Impostiamo il timeout della sessione
   const expiresAt = Date.now() + SESSION_DURATION;
-  localStorage.setItem(SESSION_TIMEOUT_KEY, expiresAt.toString());
+  
+  // Salviamo il token in Firebase
+  await firebaseService.setAuthToken(customer.id, token, expiresAt);
   
   return token;
 };
 
 /**
- * Crea un token di autenticazione per l'amministratore e lo salva nel localStorage
+ * Crea un token di autenticazione per l'amministratore e lo salva in Firebase
  * @param adminId - L'ID dell'amministratore
  * @returns Il token generato
  */
-export const authenticateAdmin = (adminId: string): string => {
+export const authenticateAdmin = async (adminId: string): Promise<string> => {
   const payload = {
     id: adminId,
     role: 'admin'
   };
   
   const token = generateToken(payload, SESSION_DURATION);
-  localStorage.setItem(ADMIN_TOKEN_KEY, token);
-  
-  // Impostiamo il timeout della sessione
   const expiresAt = Date.now() + SESSION_DURATION;
-  localStorage.setItem(SESSION_TIMEOUT_KEY, expiresAt.toString());
+  
+  // Salviamo il token in Firebase
+  await firebaseService.setAdminToken(adminId, token, expiresAt);
   
   return token;
 };
@@ -59,77 +55,127 @@ export const authenticateAdmin = (adminId: string): string => {
  * Verifica se l'utente corrente è autenticato
  * @returns true se l'utente è autenticato, altrimenti false
  */
-export const isAuthenticated = (): boolean => {
-  // Verifichiamo se esiste un token
-  const token = localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(ADMIN_TOKEN_KEY);
-  if (!token) return false;
-  
-  // Verifichiamo se il token è valido
-  const payload = verifyToken(token);
-  if (!payload) {
-    // Se il token non è valido, effettuiamo il logout
-    logout();
+export const isAuthenticated = async (): Promise<boolean> => {
+  try {
+    // Otteniamo l'ID utente dalla sessione
+    const userId = sessionStorage.getItem('current_user_id');
+    if (!userId) return false;
+    
+    // Verifichiamo se esiste un token in Firebase
+    const authData = await firebaseService.getAuthToken(userId);
+    if (!authData || !authData.token) return false;
+    
+    // Verifichiamo se il token è valido
+    const payload = verifyToken(authData.token);
+    if (!payload) {
+      // Se il token non è valido, effettuiamo il logout
+      await logout();
+      return false;
+    }
+    
+    // Verifichiamo se la sessione è scaduta
+    if (authData.expiresAt < Date.now()) {
+      // Se la sessione è scaduta, effettuiamo il logout
+      await logout();
+      return false;
+    }
+    
+    // Rinnoviamo il timeout della sessione
+    const expiresAt = Date.now() + SESSION_DURATION;
+    await firebaseService.setAuthToken(userId, authData.token, expiresAt);
+    
+    return true;
+  } catch (error) {
+    console.error('Errore durante la verifica dell\'autenticazione:', error);
     return false;
   }
-  
-  // Verifichiamo se la sessione è scaduta
-  const timeout = localStorage.getItem(SESSION_TIMEOUT_KEY);
-  if (timeout && parseInt(timeout) < Date.now()) {
-    // Se la sessione è scaduta, effettuiamo il logout
-    logout();
-    return false;
-  }
-  
-  // Rinnoviamo il timeout della sessione
-  const expiresAt = Date.now() + SESSION_DURATION;
-  localStorage.setItem(SESSION_TIMEOUT_KEY, expiresAt.toString());
-  
-  return true;
 };
 
 /**
  * Verifica se l'utente corrente è un amministratore
  * @returns true se l'utente è un amministratore autenticato, altrimenti false
  */
-export const isAdmin = (): boolean => {
-  const token = localStorage.getItem(ADMIN_TOKEN_KEY);
-  if (!token) return false;
-  
-  const payload = verifyToken(token);
-  return payload?.role === 'admin';
+export const isAdmin = async (): Promise<boolean> => {
+  try {
+    // Otteniamo l'ID admin dalla sessione
+    const adminId = sessionStorage.getItem('current_admin_id');
+    if (!adminId) return false;
+    
+    // Verifichiamo se esiste un token in Firebase
+    const authData = await firebaseService.getAdminToken(adminId);
+    if (!authData || !authData.token) return false;
+    
+    // Verifichiamo se il token è valido
+    const payload = verifyToken(authData.token);
+    return payload?.role === 'admin';
+  } catch (error) {
+    console.error('Errore durante la verifica dell\'amministratore:', error);
+    return false;
+  }
 };
 
 /**
  * Effettua il logout dell'utente corrente
  */
-export const logout = (): void => {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(ADMIN_TOKEN_KEY);
-  localStorage.removeItem(SESSION_TIMEOUT_KEY);
+export const logout = async (): Promise<void> => {
+  try {
+    // Otteniamo gli ID utente e admin dal sessionStorage
+    const userId = sessionStorage.getItem('current_user_id');
+    const adminId = sessionStorage.getItem('current_admin_id');
+    
+    // Rimuoviamo i token da Firebase
+    if (userId) {
+      await firebaseService.removeAuthToken(userId);
+      sessionStorage.removeItem('current_user_id');
+    }
+    
+    if (adminId) {
+      await firebaseService.removeAdminToken(adminId);
+      sessionStorage.removeItem('current_admin_id');
+    }
+  } catch (error) {
+    console.error('Errore durante il logout:', error);
+  }
 };
 
 /**
- * Ottiene l'ID dell'utente corrente dal token
+ * Ottiene l'ID dell'utente corrente dal sessionStorage
  * @returns L'ID dell'utente se autenticato, altrimenti null
  */
 export const getCurrentUserId = (): string | null => {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(ADMIN_TOKEN_KEY);
-  if (!token) return null;
-  
-  const payload = verifyToken(token);
-  return (payload?.id as string) || null;
+  return sessionStorage.getItem('current_user_id') || sessionStorage.getItem('current_admin_id') || null;
 };
 
 /**
- * Ottiene il ruolo dell'utente corrente dal token
+ * Ottiene il ruolo dell'utente corrente
  * @returns Il ruolo dell'utente se autenticato, altrimenti null
  */
-export const getCurrentUserRole = (): 'admin' | 'customer' | null => {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(ADMIN_TOKEN_KEY);
-  if (!token) return null;
-  
-  const payload = verifyToken(token);
-  return (payload?.role as 'admin' | 'customer') || null;
+export const getCurrentUserRole = async (): Promise<'admin' | 'customer' | null> => {
+  try {
+    const userId = sessionStorage.getItem('current_user_id');
+    const adminId = sessionStorage.getItem('current_admin_id');
+    
+    if (adminId) {
+      const authData = await firebaseService.getAdminToken(adminId);
+      if (authData && authData.token) {
+        const payload = verifyToken(authData.token);
+        if (payload?.role === 'admin') return 'admin';
+      }
+    }
+    
+    if (userId) {
+      const authData = await firebaseService.getAuthToken(userId);
+      if (authData && authData.token) {
+        const payload = verifyToken(authData.token);
+        if (payload?.role === 'customer') return 'customer';
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Errore durante il recupero del ruolo utente:', error);
+    return null;
+  }
 };
 
 /**

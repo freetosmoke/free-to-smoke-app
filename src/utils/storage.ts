@@ -1,7 +1,8 @@
 import type { Customer, Prize, Notification, NotificationHistory, PointTransaction } from '../types';
+import { SecurityEventType } from '../types';
 import { encrypt, decrypt, hashPassword, verifyPassword } from './crypto';
 import { sanitizeObject } from './security';
-import { logSecurityEvent, SecurityEventType } from './securityLogger';
+import { logSecurityEvent } from './securityLogger';
 
 const STORAGE_KEYS = {
   CUSTOMERS: 'freetosmoke_customers',
@@ -59,7 +60,7 @@ export const addCustomer = (customer: Customer): void => {
     saveCustomers(customers);
     
     // Registriamo l'evento di registrazione
-    logSecurityEvent(SecurityEventType.REGISTRATION, customer.id);
+    logSecurityEvent(SecurityEventType.REGISTRATION, customer.id, 'Registrazione cliente completata');
   } catch (error) {
     console.error('Errore durante l\'aggiunta del cliente:', error);
   }
@@ -76,7 +77,7 @@ export const updateCustomer = (updatedCustomer: Customer): void => {
       saveCustomers(customers);
       
       // Registriamo l'evento di modifica dei dati
-      logSecurityEvent(SecurityEventType.CUSTOMER_DATA_MODIFIED, updatedCustomer.id);
+      logSecurityEvent(SecurityEventType.CUSTOMER_DATA_MODIFIED, updatedCustomer.id, 'Dati cliente aggiornati');
     }
   } catch (error) {
     console.error('Errore durante l\'aggiornamento del cliente:', error);
@@ -231,9 +232,9 @@ export const setAdminAuth = (isAuthenticated: boolean): void => {
     
     // Registriamo l'evento di accesso o logout dell'amministratore
     if (isAuthenticated) {
-      logSecurityEvent(SecurityEventType.ADMIN_ACCESS, 'admin');
+      logSecurityEvent(SecurityEventType.ADMIN_ACCESS, 'admin', 'Accesso amministratore');
     } else {
-      logSecurityEvent(SecurityEventType.LOGOUT, 'admin');
+      logSecurityEvent(SecurityEventType.LOGOUT, 'admin', 'Logout amministratore');
     }
   } catch (error) {
     console.error('Errore durante l\'impostazione dell\'autenticazione admin:', error);
@@ -282,7 +283,7 @@ export const setAdminCredentials = (email: string, password: string): void => {
     localStorage.setItem(STORAGE_KEYS.ADMIN_CREDENTIALS, encryptedData);
     
     // Registriamo l'evento di modifica delle credenziali
-    logSecurityEvent(SecurityEventType.PASSWORD_CHANGE, 'admin');
+    logSecurityEvent(SecurityEventType.PASSWORD_CHANGE, 'admin', 'Credenziali amministratore aggiornate');
   } catch (error) {
     console.error('Errore durante l\'impostazione delle credenziali admin:', error);
   }

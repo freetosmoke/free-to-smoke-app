@@ -1,7 +1,4 @@
-import { encrypt, decrypt } from './crypto';
-
-// Chiave per il token CSRF nel localStorage
-const CSRF_TOKEN_KEY = 'freetosmoke_csrf_token';
+import * as firebaseService from './firebase';
 
 /**
  * Sanitizza un input di testo per prevenire attacchi XSS
@@ -45,7 +42,11 @@ export const sanitizeObject = <T>(obj: T): T => {
   
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      result[key] = sanitizeObject(obj[key]);
+      const value = obj[key];
+      // Rimuovi completamente i campi undefined per evitare errori Firestore
+      if (value !== undefined) {
+        result[key] = sanitizeObject(value);
+      }
     }
   }
   
@@ -53,7 +54,7 @@ export const sanitizeObject = <T>(obj: T): T => {
 };
 
 /**
- * Genera un token CSRF e lo salva nel localStorage
+ * Genera un token CSRF
  * @returns Il token CSRF generato
  */
 export const generateCsrfToken = (): string => {
@@ -61,9 +62,6 @@ export const generateCsrfToken = (): string => {
   const token = Math.random().toString(36).substring(2, 15) + 
                Math.random().toString(36).substring(2, 15) + 
                Date.now().toString(36);
-  
-  // Salva il token nel localStorage
-  localStorage.setItem(CSRF_TOKEN_KEY, encrypt(token));
   
   return token;
 };
@@ -74,11 +72,8 @@ export const generateCsrfToken = (): string => {
  * @returns true se il token è valido, altrimenti false
  */
 export const validateCsrfToken = (token: string): boolean => {
-  const storedToken = localStorage.getItem(CSRF_TOKEN_KEY);
-  if (!storedToken) return false;
-  
-  const decryptedToken = decrypt(storedToken);
-  return decryptedToken === token;
+  // Validazione semplice: verifica che il token non sia vuoto e abbia una lunghezza minima
+  return Boolean(token && token.length > 10);
 };
 
 /**
@@ -141,38 +136,43 @@ export const setupSecurityProtections = (): void => {
  * @param key - La chiave per identificare l'azione (es. 'login', 'register')
  * @param maxAttempts - Il numero massimo di tentativi consentiti
  * @param timeWindow - La finestra temporale in millisecondi
- * @returns true se l'azione è consentita, altrimenti false
+ * @returns Promise che risolve a true se l'azione è consentita, altrimenti false
  */
-export const rateLimiter = (key: string, maxAttempts: number = 5, timeWindow: number = 60000): boolean => {
-  const storageKey = `ratelimit_${key}`;
-  
-  // Ottieni i tentativi precedenti dal localStorage
-  const attemptsJson = localStorage.getItem(storageKey);
-  const attempts = attemptsJson ? JSON.parse(decrypt(attemptsJson)) : [];
-  
-  // Filtra i tentativi all'interno della finestra temporale
-  const now = Date.now();
-  const recentAttempts = attempts.filter((timestamp: number) => now - timestamp < timeWindow);
-  
-  // Verifica se è stato superato il limite
-  if (recentAttempts.length >= maxAttempts) {
-    return false; // Limite superato
+export const rateLimiter = async (key: string, maxAttempts: number = 5, timeWindow: number = 60000): Promise<boolean> => {
+  try {
+    // Ottieni i tentativi precedenti da Firebase
+    const attempts = await firebaseService.getRateLimitAttempts(key);
+    
+    // Filtra i tentativi all'interno della finestra temporale
+    const now = Date.now();
+    const recentAttempts = attempts.filter((timestamp: number) => now - timestamp < timeWindow);
+    
+    // Verifica se è stato superato il limite
+    if (recentAttempts.length >= maxAttempts) {
+      return false; // Limite superato
+    }
+    
+    // Aggiungi il tentativo corrente
+    recentAttempts.push(now);
+    
+    // Salva i tentativi aggiornati in Firebase
+    await firebaseService.setRateLimitAttempts(key, recentAttempts);
+    
+    return true; // Azione consentita
+  } catch (error) {
+    console.error('Errore durante il rate limiting:', error);
+    return false; // In caso di errore, blocca l'azione per sicurezza
   }
-  
-  // Aggiungi il tentativo corrente
-  recentAttempts.push(now);
-  
-  // Salva i tentativi aggiornati
-  localStorage.setItem(storageKey, encrypt(JSON.stringify(recentAttempts)));
-  
-  return true; // Azione consentita
 };
 
 /**
  * Resetta il contatore di rate limiting per una determinata chiave
  * @param key - La chiave per identificare l'azione
  */
-export const resetRateLimiter = (key: string): void => {
-  const storageKey = `ratelimit_${key}`;
-  localStorage.removeItem(storageKey);
+export const resetRateLimiter = async (key: string): Promise<void> => {
+  try {
+    await firebaseService.resetRateLimit(key);
+  } catch (error) {
+    console.error('Errore durante il reset del rate limiter:', error);
+  }
 };

@@ -4,9 +4,11 @@ import Registration from './components/Registration';
 import Login from './components/Login';
 import CustomerProfile from './components/CustomerProfile';
 import AdminPanel from './components/AdminPanel';
+import AdminLogin from './components/AdminLogin';
+import FirebaseInitializer from './components/FirebaseInitializer';
 import { Customer } from './types';
 
-type Page = 'home' | 'register' | 'login' | 'profile' | 'admin';
+type Page = 'home' | 'register' | 'login' | 'profile' | 'admin' | 'adminLogin';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
@@ -15,8 +17,12 @@ function App() {
   const handleNavigate = (page: string, data?: unknown) => {
     if (page === 'profile' && data) {
       setCurrentCustomer(data as Customer);
+      setCurrentPage('profile');
+    } else {
+      // Per qualsiasi altra pagina, resetta currentCustomer
+      setCurrentCustomer(null);
+      setCurrentPage(page as Page);
     }
-    setCurrentPage(page as Page);
   };
 
   const renderPage = () => {
@@ -35,15 +41,19 @@ function App() {
         );
       case 'admin':
         return <AdminPanel onNavigate={handleNavigate} />;
+      case 'adminLogin':
+        return <AdminLogin onNavigate={handleNavigate} />;
       default:
         return <HomePage onNavigate={handleNavigate} />;
     }
-  };
+  }
 
   return (
-    <div className="app">
-      {renderPage()}
-    </div>
+    <FirebaseInitializer>
+      <div className="app">
+        {renderPage()}
+      </div>
+    </FirebaseInitializer>
   );
 }
 

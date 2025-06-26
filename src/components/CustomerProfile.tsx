@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Trophy, Gift, Bell, User, Star, Upload, Camera, Check, X, Shield } from 'lucide-react';
-import { Customer, Prize, Notification } from '../types';
+import { Customer, Prize, Notification, SecurityEventType } from '../types';
 import { getUserLevel, getNextLevel, getPointsToNextLevel, LEVEL_CONFIGS } from '../utils/levels';
-import { getPrizes, getNotifications, updateCustomer } from '../utils/storage';
+import * as firebaseService from '../utils/firebase';
 import { sanitizeObject, setupSecurityProtections, generateCsrfToken, validateCsrfToken } from '../utils/security';
 import { isAuthenticated, getCurrentUserId, logout } from '../utils/auth';
-import { logSecurityEvent, SecurityEventType } from '../utils/securityLogger';
+import { logSecurityEvent } from '../utils/securityLogger';
 
 interface CustomerProfileProps {
   customer: Customer;
@@ -27,13 +27,36 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, onNavigate 
   const [csrfToken, setCsrfToken] = useState<string>("");
 
   useEffect(() => {
+    let isMounted = true;
+    
     // Verifica se l'utente è autenticato
-    if (!isAuthenticated() || getCurrentUserId() !== customer.id) {
-      // Reindirizza alla pagina di login se non autenticato o se l'ID non corrisponde
-      onNavigate('home');
-      return;
-    }
-
+    const checkAuth = async () => {
+      const authenticated = await isAuthenticated();
+      if (!isMounted) return;
+      
+      if (!authenticated || getCurrentUserId() !== customer.id) {
+        // Reindirizza alla pagina di login se non autenticato o se l'ID non corrisponde
+        onNavigate('home');
+        return;
+      }
+      
+      // Continua con il caricamento dei dati solo se l'utente è autenticato
+      try {
+        const prizesData = await firebaseService.getPrizes();
+        if (!isMounted) return;
+        setPrizes(prizesData.filter((p: Prize) => p.isActive));
+        
+        const notificationsData = await firebaseService.getNotifications();
+        if (!isMounted) return;
+        setNotifications(notificationsData.filter((n: Notification) => n.isActive));
+        
+        // Registra l'accesso al profilo
+        logSecurityEvent(SecurityEventType.PROFILE_ACCESS, customer.id, 'Accesso al profilo cliente');
+      } catch (error) {
+        console.error('Errore durante il caricamento dei dati:', error);
+      }
+    };
+    
     // Imposta le protezioni di sicurezza
     setupSecurityProtections();
     
@@ -41,16 +64,12 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, onNavigate 
     const token = generateCsrfToken();
     setCsrfToken(token);
     
-    // Carica i dati
-    try {
-      setPrizes(getPrizes().filter(p => p.isActive));
-      setNotifications(getNotifications().filter(n => n.isActive));
-      
-      // Registra l'accesso al profilo
-      logSecurityEvent(SecurityEventType.PROFILE_ACCESS, customer.id, 'Accesso al profilo cliente');
-    } catch (error) {
-      console.error('Errore durante il caricamento dei dati:', error);
-    }
+    checkAuth();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, [customer.id, onNavigate]);
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -84,7 +103,7 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, onNavigate 
     }
   };
   
-  const saveProfileImage = () => {
+  const saveProfileImage = async () => {
     // Verifica il token CSRF
     if (!validateCsrfToken(csrfToken)) {
       alert("Errore di sicurezza. Ricarica la pagina e riprova.");
@@ -99,7 +118,7 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, onNavigate 
         profileImage: newProfileImage
       });
       
-      updateCustomer(sanitizedCustomer);
+      await firebaseService.updateCustomer(sanitizedCustomer);
       setCurrentCustomer(sanitizedCustomer);
       setIsEditingImage(false);
       setNewProfileImage('');
@@ -135,10 +154,16 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, onNavigate 
         </div>
         <div className="ml-auto">
           <button
-            onClick={() => {
-              logout();
-              logSecurityEvent(SecurityEventType.LOGOUT, customer.id, 'Logout cliente');
-              onNavigate('home');
+            onClick={async () => {
+              try {
+                await firebaseService.logoutAdmin();
+                logout();
+                logSecurityEvent(SecurityEventType.LOGOUT, customer.id, 'Logout cliente');
+                onNavigate('home');
+              } catch (error) {
+                console.error('Errore durante il logout:', error);
+                onNavigate('home');
+              }
             }}
             className="flex items-center text-gray-400 hover:text-white transition-colors p-2 rounded-full hover:bg-gray-700/50"
             title="Logout"

@@ -1,12 +1,12 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { UserPlus, LogIn, Shield, Instagram, Award, Gift, TrendingUp } from 'lucide-react';
-import { Customer } from '../types';
-import { getCustomers } from '../utils/storage';
+import { Customer, SecurityEventType } from '../types';
+import * as firebaseService from '../utils/firebase';
 import { LEVEL_CONFIGS, getUserLevel, getNextLevel, getPointsToNextLevel } from '../utils/levels';
 import { setupSecurityProtections } from '../utils/security';
 import { isAuthenticated, getCurrentUserId, logout } from '../utils/auth';
-import { logSecurityEvent, SecurityEventType } from '../utils/securityLogger';
+import { logSecurityEvent } from '../utils/securityLogger';
 
 interface HomePageProps {
   onNavigate: (page: string) => void;
@@ -20,27 +20,32 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
     setupSecurityProtections();
     
     // Controlla se c'è un utente loggato usando il sistema di autenticazione sicuro
-    if (isAuthenticated()) {
-      const userId = getCurrentUserId();
-      if (userId) {
-        try {
-          const customers = getCustomers();
-          const customer = customers.find(c => c.id === userId);
-          if (customer) {
-            setLoggedInCustomer(customer);
-            // Registra l'accesso alla home page
-            logSecurityEvent(SecurityEventType.PAGE_ACCESS, userId, 'Accesso alla home page');
-          } else {
-            // Se l'utente non esiste più, effettua il logout
-            logout();
+    const checkAuth = async () => {
+      const authenticated = await isAuthenticated();
+      if (authenticated) {
+        const userId = getCurrentUserId();
+        if (userId) {
+          try {
+            const customers = await firebaseService.getCustomers();
+            const customer = customers.find(c => c.id === userId);
+            if (customer) {
+              setLoggedInCustomer(customer);
+              // Registra l'accesso alla home page
+              logSecurityEvent(SecurityEventType.PAGE_ACCESS, userId, 'Accesso alla home page');
+            } else {
+              // Se l'utente non esiste più, effettua il logout
+              await logout();
+            }
+          } catch (error) {
+            console.error('Errore durante il recupero dei dati cliente:', error);
+            // In caso di errore, effettua il logout per sicurezza
+            await logout();
           }
-        } catch (error) {
-          console.error('Errore durante il recupero dei dati cliente:', error);
-          // In caso di errore, effettua il logout per sicurezza
-          logout();
         }
       }
-    }
+    };
+    
+    checkAuth();
   }, []);
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -75,12 +80,16 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
 
           {loggedInCustomer ? (
             <button
-              onClick={() => {
-                logout();
-                setLoggedInCustomer(null);
-                logSecurityEvent(SecurityEventType.LOGOUT, loggedInCustomer.id, 'Logout dalla home page');
-                // Forza il refresh della pagina per assicurarsi che tutti i dati sensibili vengano rimossi
-                window.location.reload();
+              onClick={async () => {
+                try {
+                  await firebaseService.logoutAdmin();
+                  logout();
+                  setLoggedInCustomer(null);
+                  logSecurityEvent(SecurityEventType.LOGOUT, loggedInCustomer.id, 'Logout dalla home page');
+                } catch (error) {
+                  console.error('Errore durante il logout:', error);
+                  setLoggedInCustomer(null);
+                }
               }}
               className="flex-1 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition-all duration-300 transform hover:scale-[1.05] shadow-lg shadow-red-900/30 border border-red-400/20"
             >
@@ -232,7 +241,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         <div className="flex flex-col items-center mt-2">
           <button
             onClick={() => {
-              onNavigate('admin');
+              onNavigate('adminLogin');
               logSecurityEvent(SecurityEventType.ADMIN_ACCESS_ATTEMPT, 'unknown', 'Tentativo di accesso all\'area admin dalla home page');
             }}
             className="text-gray-500 hover:text-gray-300 text-xs flex items-center justify-center mt-3 transition-colors duration-300 bg-transparent"
