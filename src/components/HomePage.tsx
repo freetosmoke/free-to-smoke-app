@@ -59,7 +59,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
     const loadSecretCode = async () => {
       try {
         const code = await firebaseService.getSecretCode();
-        setCurrentSecretCode(code);
+        setSecretCode(code);
       } catch (error) {
         console.error('Errore durante il caricamento del codice segreto:', error);
         // Mantiene il fallback di default
@@ -70,17 +70,26 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
   }, []);
 
   // Gestione del form segreto
-  const handleSecretSubmit = (e: React.FormEvent) => {
+  const handleSecretSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (secretCode === 'FTS2025') {
-      logSecurityEvent(SecurityEventType.ADMIN_ACCESS_ATTEMPT, 'unknown', 'Codice segreto corretto - accesso admin autorizzato');
-      setShowSecretForm(false);
-      setSecretCode('');
-      setSecretError('');
-      onNavigate('adminLogin');
-    } else {
-      setSecretError('Codice non valido');
-      logSecurityEvent(SecurityEventType.ADMIN_ACCESS_ATTEMPT, 'unknown', `Codice segreto errato: ${secretCode}`);
+    
+    try {
+      // Carica il codice segreto attuale da Firebase
+      const currentSecretCode = await firebaseService.getSecretCode();
+      
+      if (secretCode === currentSecretCode) {
+        logSecurityEvent(SecurityEventType.ADMIN_ACCESS_ATTEMPT, 'unknown', 'Codice segreto corretto - accesso admin autorizzato');
+        setShowSecretForm(false);
+        setSecretCode('');
+        setSecretError('');
+        onNavigate('adminLogin');
+      } else {
+        setSecretError('Codice non valido');
+        logSecurityEvent(SecurityEventType.ADMIN_ACCESS_ATTEMPT, 'unknown', `Codice segreto errato: ${secretCode}`);
+      }
+    } catch (error) {
+      console.error('Errore durante la verifica del codice segreto:', error);
+      setSecretError('Errore durante la verifica del codice');
     }
   };
 
@@ -111,7 +120,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
     const checkAuth = async () => {
       if (loggedInCustomer) {
         try {
-          const isValid = await firebaseService.auth.currentUser !== null;
+          const isValid = await firebaseService.validateUserSession();
           if (!isValid) {
             console.log('Sessione non valida, effettuo logout');
             await logout();
