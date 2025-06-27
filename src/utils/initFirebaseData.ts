@@ -122,8 +122,10 @@ export const initializeFirebaseData = async (): Promise<void> => {
     }
     console.log(`Inizializzate ${sampleTransactions.length} transazioni in Firebase`);
     
-    // Configuriamo l'account admin
-    await firebaseService.setupAdminAccount('admin@freetosmoke.com', 'Admin123!');
+    // Configuriamo l'account admin usando variabili d'ambiente
+    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@freetosmoke.com';
+    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'Admin123!';
+    await firebaseService.setupAdminAccount(adminEmail, adminPassword);
     console.log('Account admin configurato in Firebase');
     
     // Registriamo l'evento di inizializzazione
