@@ -382,7 +382,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       }
       
       console.log('Aggiornamento credenziali...');
-      await firebaseService.setAdminCredentials(newEmail, newPassword);
+      // Aggiorna prima l'email se è cambiata
+      if (newEmail !== currentCredentials.email) {
+        await firebaseService.setAdminCredentials(newEmail, currentCredentials.password);
+      }
+      // Poi aggiorna la password
+      if (newPassword) {
+        await firebaseService.updateAdminPassword(newEmail, newPassword);
+      }
       console.log('Credenziali aggiornate con successo');
       
       // Reset form
@@ -398,7 +405,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       
     } catch (error) {
       console.error('Errore durante l\'aggiornamento delle credenziali:', error);
-      setToast({ message: `Errore: ${error.message || 'Errore sconosciuto'}`, type: 'error', isVisible: true });
+      setToast({ 
+        message: `Errore: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`, 
+        type: 'error', 
+        isVisible: true 
+      });
       logSecurityEvent(SecurityEventType.PASSWORD_CHANGE_FAILURE, 'admin', 'Errore durante l\'aggiornamento delle credenziali');
     }
   };
