@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, LogIn, Award, TrendingUp, Instagram, X } from 'lucide-react';
-import { Customer } from '../types';
+import { Customer, SecurityEventType } from '../types';
 import { LEVEL_CONFIGS, getUserLevel, getNextLevel, getPointsToNextLevel } from '../utils/levels';
 import firebaseService from '../utils/firebase';
-import { logSecurityEvent, SecurityEventType } from '../utils/securityLogger';
+import { logSecurityEvent } from '../utils/securityLogger';
 
 interface HomePageProps {
   onNavigate: (page: string) => void;
