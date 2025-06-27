@@ -334,68 +334,71 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       logSecurityEvent(SecurityEventType.CSRF_ATTACK, 'admin', 'Tentativo di modifica credenziali con token CSRF non valido');
       return;
     }
+
+    const { currentPassword, newEmail, newPassword, confirmPassword } = settingsForm;
     
-    // Sanitizza gli input
-    const sanitizedCurrentPassword = settingsForm.currentPassword; // Non sanitizziamo la password
-    const sanitizedNewEmail = sanitizeInput(settingsForm.newEmail);
-    const sanitizedNewPassword = settingsForm.newPassword; // Non sanitizziamo la password
-    const sanitizedConfirmPassword = settingsForm.confirmPassword; // Non sanitizziamo la password
-    
-    if (!sanitizedCurrentPassword || !sanitizedNewEmail || !sanitizedNewPassword) {
-      setToast({ message: 'Compila tutti i campi obbligatori', type: 'error', isVisible: true });
-      return;
-    }
-    
-    // Validate current password - CORREZIONE DEL BUG
-    const currentCredentials = await firebaseService.getAdminCredentials();
-    const isCurrentPasswordValid = verifyPassword(sanitizedCurrentPassword, currentCredentials.password);
-    
-    if (!isCurrentPasswordValid) {
-      setToast({ message: 'Password attuale errata', type: 'error', isVisible: true });
-      logSecurityEvent(SecurityEventType.PASSWORD_CHANGE_FAILURE, 'admin', 'Tentativo di modifica credenziali con password attuale errata');
+    // Validazione campi obbligatori
+    if (!currentPassword || !newEmail || !newPassword || !confirmPassword) {
+      setToast({ message: 'Compila tutti i campi', type: 'error', isVisible: true });
       return;
     }
 
-    // Validate email format
-    if (!/\S+@\S+\.\S+/.test(sanitizedNewEmail)) {
-      setToast({ message: 'Email non valida', type: 'error', isVisible: true });
-      return;
-    }
-
-    // Validate password confirmation
-    if (sanitizedNewPassword !== sanitizedConfirmPassword) {
-      setToast({ message: 'Le password non coincidono', type: 'error', isVisible: true });
-      return;
-    }
-
-    // Validate password strength
-    if (sanitizedNewPassword) {
-      const passwordValidation = validatePasswordStrength(sanitizedNewPassword);
-      if (!passwordValidation.isValid) {
-        setToast({ message: passwordValidation.message, type: 'error', isVisible: true });
+    try {
+      // Debug: log delle credenziali attuali
+      console.log('Recupero credenziali attuali...');
+      const currentCredentials = await firebaseService.getAdminCredentials();
+      console.log('Credenziali recuperate:', { email: currentCredentials.email, hasPassword: !!currentCredentials.password });
+      
+      // Verifica password attuale
+      console.log('Verifica password attuale...');
+      const isCurrentPasswordValid = verifyPassword(currentPassword, currentCredentials.password);
+      console.log('Password valida:', isCurrentPasswordValid);
+      
+      if (!isCurrentPasswordValid) {
+        setToast({ message: 'Password attuale errata', type: 'error', isVisible: true });
+        logSecurityEvent(SecurityEventType.PASSWORD_CHANGE_FAILURE, 'admin', 'Tentativo di modifica credenziali con password attuale errata');
         return;
       }
-    }
-    
-    try {
-      // Update credentials
-      await firebaseService.setAdminCredentials(sanitizedNewEmail, sanitizedNewPassword);
+
+      // Validazione email
+      if (!/\S+@\S+\.\S+/.test(newEmail)) {
+        setToast({ message: 'Email non valida', type: 'error', isVisible: true });
+        return;
+      }
+
+      // Validazione conferma password
+      if (newPassword !== confirmPassword) {
+        setToast({ message: 'Le password non coincidono', type: 'error', isVisible: true });
+        return;
+      }
+
+      // Validazione forza password
+      if (newPassword) {
+        const passwordValidation = validatePasswordStrength(newPassword);
+        if (!passwordValidation.isValid) {
+          setToast({ message: passwordValidation.message, type: 'error', isVisible: true });
+          return;
+        }
+      }
       
-      // Registra la modifica delle credenziali
-      logSecurityEvent(SecurityEventType.PASSWORD_CHANGE, 'admin', 'Credenziali amministratore aggiornate');
+      console.log('Aggiornamento credenziali...');
+      await firebaseService.setAdminCredentials(newEmail, newPassword);
+      console.log('Credenziali aggiornate con successo');
       
       // Reset form
       setSettingsForm({
         currentPassword: '',
-        newEmail: sanitizedNewEmail,
+        newEmail: newEmail,
         newPassword: '',
         confirmPassword: ''
       });
 
       setToast({ message: 'Credenziali aggiornate con successo', type: 'success', isVisible: true });
+      logSecurityEvent(SecurityEventType.PASSWORD_CHANGE, 'admin', 'Credenziali amministratore aggiornate');
+      
     } catch (error) {
       console.error('Errore durante l\'aggiornamento delle credenziali:', error);
-      setToast({ message: 'Errore durante l\'aggiornamento delle credenziali', type: 'error', isVisible: true });
+      setToast({ message: `Errore: ${error.message || 'Errore sconosciuto'}`, type: 'error', isVisible: true });
       logSecurityEvent(SecurityEventType.PASSWORD_CHANGE_FAILURE, 'admin', 'Errore durante l\'aggiornamento delle credenziali');
     }
   };

@@ -845,7 +845,7 @@ export const resetAdminCompletely = async (): Promise<void> => {
 export const updateAdminPassword = async (email: string, newPassword: string): Promise<void> => {
   try {
     // Hash della nuova password
-    const hashedPassword = CryptoJS.SHA256(newPassword).toString();
+    const hashedPassword = hashPassword(newPassword);
     
     // Trova il documento admin
     const adminCredentialsCollection = collection(db, COLLECTIONS.ADMIN_CREDENTIALS);

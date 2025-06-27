@@ -54,15 +54,15 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
     }
   };
 
-  // Carica il codice segreto da Firebase
+  // Carica il codice segreto da Firebase (solo per validazione interna)
   useEffect(() => {
     const loadSecretCode = async () => {
       try {
         const code = await firebaseService.getSecretCode();
-        setSecretCode(code);
+        // NON impostare il codice nel campo input!
+        // setSecretCode(code); // RIMOSSO - era questo il problema!
       } catch (error) {
         console.error('Errore durante il caricamento del codice segreto:', error);
-        // Mantiene il fallback di default
       }
     };
     
@@ -74,7 +74,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
     e.preventDefault();
     
     try {
-      // Carica il codice segreto attuale da Firebase
+      // Carica il codice segreto attuale da Firebase solo per la validazione
       const currentSecretCode = await firebaseService.getSecretCode();
       
       if (secretCode === currentSecretCode) {
