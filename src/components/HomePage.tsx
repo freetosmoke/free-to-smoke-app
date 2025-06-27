@@ -19,19 +19,18 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
   const [secretError, setSecretError] = useState('');
 
   // useEffect temporaneo per creare l'admin
-  useEffect(() => {
-    const createAdmin = async () => {
-      try {
-        await firebaseService.setupAdminAccount('admin@freetosmoke.com', 'Admin123!');
-        console.log('Admin creato con successo!');
-      } catch (error) {
-        console.log('Admin già esistente o errore:', error);
-      }
-    };
-    
-    // Esegui solo una volta
-    createAdmin();
-  }, []);
+  // useEffect(() => {
+  //   console.log('useEffect per admin in esecuzione...');
+  //   const createAdmin = async () => {
+  //     try {
+  //       await firebaseService.setupAdminAccount('admin@freetosmoke.com', 'Admin123!');
+  //       console.log('Admin creato con successo!');
+  //     } catch (error) {
+  //       console.error('Errore creazione admin:', error);
+  //     }
+  //   };
+  //   createAdmin();
+  // }, []);
 
   // Reset del contatore dopo 3 secondi
   useEffect(() => {
@@ -330,3 +329,17 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
 };
 
 export default HomePage;
+
+// Rimuovi completamente queste righe commentate (dalla riga 22 in poi):
+// useEffect(() => {
+//   console.log('useEffect per admin in esecuzione...');
+//   const createAdmin = async () => {
+//     try {
+//       await firebaseService.setupAdminAccount('admin@freetosmoke.com', 'Admin123!');
+//       console.log('Admin creato con successo!');
+//     } catch (error) {
+//       console.error('Errore creazione admin:', error);
+//     }
+//   };
+//   createAdmin();
+// }, []);
