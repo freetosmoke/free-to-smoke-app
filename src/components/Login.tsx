@@ -302,7 +302,9 @@ const Login: React.FC<LoginProps> = ({ onNavigate }) => {
         }
         
         // Aggiorna la password dell'admin
-        await firebaseService.updateAdminPassword('admin@freetosmoke.com', newPasswordForm.password);
+        // Linea 305 - Aggiungi un parametro per la password corrente
+        // Dato che questo è un recupero password, possiamo usare una stringa vuota o gestire diversamente
+        await firebaseService.updateAdminPasswordRecovery('admin@freetosmoke.com', newPasswordForm.password);
         
         setToast({
           message: 'Password aggiornata con successo!',

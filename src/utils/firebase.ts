@@ -1,6 +1,6 @@
 import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, query, where, addDoc, Timestamp, orderBy, writeBatch, getDoc } from 'firebase/firestore';
-import { getAuth, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updatePassword } from 'firebase/auth';
-import { getStorage } from 'firebase/storage';
+import { getAuth, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updatePassword, updateEmail, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+// import { getStorage } from 'firebase/storage'; // Commented out: imported but never used. Uncomment if needed.
 import { initializeApp } from 'firebase/app';
 import { logSecurityEvent } from './securityLogger';
 import { setSecurityLogger, SecurityLogger } from './loggerUtils';
@@ -36,7 +36,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-const storage = getStorage(app);
+// const storage = getStorage(app); // Commented out: declared but never used. Uncomment if needed.
 
 // Configura il logger di sicurezza
 const firebaseLogger: SecurityLogger = {
@@ -842,12 +842,26 @@ export const resetAdminCompletely = async (): Promise<void> => {
   }
 };
 
-export const updateAdminPassword = async (email: string, newPassword: string): Promise<void> => {
+export const updateAdminPassword = async (email: string, newPassword: string, currentPassword: string): Promise<void> => {
   try {
-    // Hash della nuova password
-    const hashedPassword = hashPassword(newPassword);
+    // 1. Aggiorna Firebase Authentication
+    const user = auth.currentUser;
+    if (user) {
+      // Riautentica l'utente prima di cambiare la password
+      const credential = EmailAuthProvider.credential(user.email!, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+      
+      // Aggiorna la password in Firebase Auth
+      await updatePassword(user, newPassword);
+      
+      // Se l'email è cambiata, aggiornala anche
+      if (user.email !== email) {
+        await updateEmail(user, email);
+      }
+    }
     
-    // Trova il documento admin
+    // 2. Aggiorna anche Firestore (codice esistente)
+    const hashedPassword = hashPassword(newPassword);
     const adminCredentialsCollection = collection(db, COLLECTIONS.ADMIN_CREDENTIALS);
     const q = query(adminCredentialsCollection, where('email', '==', email));
     const querySnapshot = await getDocs(q);
@@ -855,16 +869,17 @@ export const updateAdminPassword = async (email: string, newPassword: string): P
     if (!querySnapshot.empty) {
       const adminDoc = querySnapshot.docs[0];
       await updateDoc(adminDoc.ref, {
+        email: email,
         password: hashedPassword,
         lastPasswordChange: Timestamp.now()
       });
       
-      logSecurityEvent(SecurityEventType.PASSWORD_CHANGE, email, 'Password aggiornata tramite recupero');
+      logSecurityEvent(SecurityEventType.PASSWORD_CHANGE, email, 'Credenziali aggiornate (Auth + Firestore)');
     } else {
       throw new Error('Admin non trovato');
     }
   } catch (error) {
-    console.error('Errore durante l\'aggiornamento della password:', error);
+    console.error('Errore durante l\'aggiornamento delle credenziali:', error);
     throw error;
   }
 };
@@ -1047,59 +1062,74 @@ export const setSecretCode = async (newCode: string): Promise<void> => {
   }
 };
 
-export default {
-  app,
-  db,
-  auth,
-  storage,
-  getCustomers,
-  addCustomer,
-  updateCustomer,
-  deleteCustomer,
-  findCustomerByPhone,
-  findCustomerByEmail,
-  getPrizes,
-  savePrizes,
-  addPrize,
-  updatePrize,
-  getNotifications,
-  saveNotifications,
-  getNotificationHistory,
-  addNotificationToHistory,
-  getTransactions,
-  addTransaction,
-  loginAdmin,
-  logoutAdmin,
-  isAdminLoggedIn,
-  setupAdminAccount,
-  changeAdminPassword,
-  setAdminLoginBlocked,
-  getAdminLoginBlocked,
-  setUserLoginBlocked,
-  getUserLoginBlocked,
-  checkAdminExists,
-  resetAdminCompletely,
-  updateAdminPassword,
-  setAuthToken,
-  getAuthToken,
-  removeAuthToken,
-  setAdminToken,
-  getAdminToken,
-  removeAdminToken,
-  getRateLimitAttempts,
-  setRateLimitAttempts,
-  resetRateLimit,
-  getSecurityLogs,
-  clearSecurityLogs,
-  saveSecurityQuestions,
-  getSecurityQuestions,
-  verifySecurityAnswers,
-  setAdminAuth,
-  getAdminAuth,
-  getAdminCredentials,
-  setAdminCredentials,
-  validateAdminCredentials,
-  getSecretCode,
-  setSecretCode,
-  validateUserSession
+export const updateAdminEmail = async (newEmail: string, currentPassword: string): Promise<void> => {
+  try {
+    // 1. Aggiorna Firebase Authentication
+    const user = auth.currentUser;
+    if (user) {
+      // Riautentica l'utente prima di cambiare l'email
+      const credential = EmailAuthProvider.credential(user.email!, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+      
+      // Aggiorna l'email in Firebase Auth
+      await updateEmail(user, newEmail);
+    }
+    
+    // 2. Aggiorna anche Firestore
+    const adminCredentialsCollection = collection(db, COLLECTIONS.ADMIN_CREDENTIALS);
+    const q = query(adminCredentialsCollection, where('email', '==', user?.email || ''));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const adminDoc = querySnapshot.docs[0];
+      await updateDoc(adminDoc.ref, {
+        email: newEmail,
+        lastEmailChange: Timestamp.now()
+      });
+      
+      logSecurityEvent(SecurityEventType.PASSWORD_CHANGE, newEmail, 'Email aggiornata (Auth + Firestore)');
+    } else {
+      throw new Error('Admin non trovato');
+    }
+  } catch (error) {
+    console.error('Errore durante l\'aggiornamento dell\'email:', error);
+    throw error;
+  }
 };
+
+// Funzione specifica per il recupero password (senza riautenticazione)
+export const updateAdminPasswordRecovery = async (email: string, newPassword: string): Promise<void> => {
+  try {
+    // 1. Aggiorna Firebase Authentication (se l'utente è loggato)
+    const user = auth.currentUser;
+    if (user && user.email === email) {
+      await updatePassword(user, newPassword);
+    }
+    
+    // 2. Aggiorna Firestore
+    const hashedPassword = hashPassword(newPassword);
+    const adminCredentialsCollection = collection(db, COLLECTIONS.ADMIN_CREDENTIALS);
+    const q = query(adminCredentialsCollection, where('email', '==', email));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const adminDoc = querySnapshot.docs[0];
+      await updateDoc(adminDoc.ref, {
+        password: hashedPassword,
+        lastPasswordChange: Timestamp.now()
+      });
+      
+      logSecurityEvent(SecurityEventType.PASSWORD_CHANGE, email, 'Password recuperata tramite domande di sicurezza');
+    } else {
+      throw new Error('Admin non trovato');
+    }
+  } catch (error) {
+    console.error('Errore durante il recupero password:', error);
+    throw error;
+  }
+};
+
+// Duplicate export block removed. All exports are handled by individual export statements above.
+
+
+// Nessuna dichiarazione duplicata di variabili/funzioni esportate: tutte le funzioni sono ora esportate una sola volta tramite named export qui sopra.

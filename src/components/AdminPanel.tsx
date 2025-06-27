@@ -382,13 +382,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       }
       
       console.log('Aggiornamento credenziali...');
-      // Aggiorna prima l'email se è cambiata
-      if (newEmail !== currentCredentials.email) {
-        await firebaseService.setAdminCredentials(newEmail, currentCredentials.password);
-      }
-      // Poi aggiorna la password
+      // Passa anche la password corrente per la riautenticazione
       if (newPassword) {
-        await firebaseService.updateAdminPassword(newEmail, newPassword);
+        await firebaseService.updateAdminPassword(currentCredentials.email, newPassword, currentPassword);
+      } else if (newEmail !== currentCredentials.email) {
+        // Se cambia solo l'email, gestisci separatamente
+        await firebaseService.updateAdminEmail(newEmail, currentPassword);
       }
       console.log('Credenziali aggiornate con successo');
       
