@@ -22,14 +22,14 @@ const DEFAULT_ADMIN_CREDENTIALS: AdminCredentials = {
   password: hashPassword('Admin123!') // Password hashata con requisiti di sicurezza
 };
 
-// Configurazione Firebase
+// Configurazione Firebase - usa le variabili d'ambiente
 const firebaseConfig = {
-  apiKey: "AIzaSyCWsBesSzANDSW43J23yA0VEjwJVmPOk40",
-  authDomain: "free-to-smoke-app-new.firebaseapp.com",
-  projectId: "free-to-smoke-app-new",
-  storageBucket: "free-to-smoke-app-new.firebasestorage.app",
-  messagingSenderId: "1003388651049",
-  appId: "1:1003388651049:web:970822d589de5d93fdfe38"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCWsBesSzANDSW43J23yA0VEjwJVmPOk40",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "free-to-smoke-app-new.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "free-to-smoke-app-new",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "free-to-smoke-app-new.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1003388651049",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1003388651049:web:970822d589de5d93fdfe38"
 };
 
 // Inizializza Firebase

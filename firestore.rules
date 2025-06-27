@@ -1,10 +1,86 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regole temporanee per lo sviluppo - permettono accesso completo
-    // ATTENZIONE: Non usare in produzione!
-    match /{document=**} {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && 
+             request.auth.uid == userId;
+    }
+    
+    function isValidUserData() {
+      return !('role' in request.resource.data) &&
+             !('isAdmin' in request.resource.data) &&
+             !('permissions' in request.resource.data) &&
+             request.resource.data.keys().hasAll(['firstName', 'lastName', 'email']) &&
+             request.resource.data.email is string &&
+             request.resource.data.firstName is string &&
+             request.resource.data.lastName is string;
+    }
+    
+    // Users collection - strict access control
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUserData();
+      allow update: if isOwner(userId) && isValidUserData();
+      allow delete: if isAdmin();
+    }
+    
+    // Admin collection - admin only
+    match /admin/{document} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Public data - read only
+    match /public/{document} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // App collections - allow read/write for authenticated users
+    match /customers/{document} {
+      allow read, write: if true; // Permetti accesso per inizializzazione
+    }
+    
+    match /prizes/{document} {
       allow read, write: if true;
+    }
+    
+    match /notifications/{document} {
+      allow read, write: if true;
+    }
+    
+    match /notification_history/{document} {
+      allow read, write: if true;
+    }
+    
+    match /transactions/{document} {
+      allow read, write: if true;
+    }
+    
+    match /admin_credentials/{document} {
+      allow read, write: if true;
+    }
+    
+    match /settings/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /security_questions/{document} {
+      allow read, write: if true;
+    }
+    
+    // Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

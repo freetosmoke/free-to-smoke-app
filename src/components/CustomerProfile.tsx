@@ -71,6 +71,11 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, onNavigate 
       isMounted = false;
     };
   }, [customer.id, onNavigate]);
+
+  // Sincronizza currentCustomer con customer quando cambia
+  useEffect(() => {
+    setCurrentCustomer(customer);
+  }, [customer]);
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Verifica il token CSRF

@@ -3,6 +3,9 @@ import { ArrowLeft, User, Mail, Phone, Calendar, Upload, X } from 'lucide-react'
 import { Customer, SecurityEventType } from '../types';
 import * as firebaseService from '../utils/firebase';
 import Toast from './Toast';
+import { Input } from './ui/Input';
+import { Button } from './ui/Button';
+import Checkbox from './ui/Checkbox';
 import { sanitizeInput, sanitizeObject } from '../utils/security';
 import { generateCsrfToken, validateCsrfToken, setupSecurityProtections } from '../utils/security';
 import { validatePasswordStrength } from '../utils/auth';
@@ -260,12 +263,16 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
 
       {/* Header */}
       <div className="flex items-center p-4 sticky top-0 z-10 bg-gradient-to-r from-gray-900 to-gray-800 shadow-md">
-        <button
+        <Button
+          type="button"
           onClick={() => onNavigate('home')}
+          variant="ghost"
+          size="sm"
           className="text-gray-400 hover:text-white transition-colors p-2 rounded-full hover:bg-gray-700/50"
+          aria-label="Torna alla home"
         >
           <ArrowLeft className="w-6 h-6" />
-        </button>
+        </Button>
         <div className="flex items-center ml-3">
           <img src="/Logo senza sfondo Free to smoke.png" alt="Free to Smoke Logo" className="h-14 mr-3" />
           <h1 className="text-xl font-semibold text-white">Registrazione</h1>
@@ -286,10 +293,10 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Input
                   type="text"
                   value={formData.firstName}
-                  onChange={(e) => {
+                  onChange={e => {
                     const value = e.target.value;
                     setFormData(prev => ({ ...prev, firstName: value }));
                     validateField('firstName', value).then(error => {
@@ -297,11 +304,10 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
                     });
                   }}
                   onBlur={() => setTouchedFields(prev => ({ ...prev, firstName: true }))}
-                  className={`w-full bg-gray-800 border-2 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base ${
-                    errors.firstName || realTimeErrors.firstName ? 'border-red-500' : (touchedFields.firstName && formData.firstName.trim()) ? 'border-green-500' : 'border-gray-600'
-                  } [&:not(:placeholder-shown)]:bg-gray-800`}
+                  leftIcon={<User className="w-5 h-5 text-gray-400" />}
                   placeholder="Nome"
                   autoComplete="given-name"
+                  error={errors.firstName || realTimeErrors.firstName}
                 />
               </div>
               {(errors.firstName || realTimeErrors.firstName) && <p className="text-red-400 text-sm mt-1">{errors.firstName || realTimeErrors.firstName}</p>}
@@ -314,10 +320,10 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Input
                   type="text"
                   value={formData.lastName}
-                  onChange={(e) => {
+                  onChange={e => {
                     const value = e.target.value;
                     setFormData(prev => ({ ...prev, lastName: value }));
                     validateField('lastName', value).then(error => {
@@ -325,11 +331,10 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
                     });
                   }}
                   onBlur={() => setTouchedFields(prev => ({ ...prev, lastName: true }))}
-                  className={`w-full bg-gray-800 border-2 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base ${
-                    errors.lastName || realTimeErrors.lastName ? 'border-red-500' : (touchedFields.lastName && formData.lastName.trim()) ? 'border-green-500' : 'border-gray-600'
-                  } [&:not(:placeholder-shown)]:bg-gray-800`}
+                  leftIcon={<User className="w-5 h-5 text-gray-400" />}
                   placeholder="Cognome"
                   autoComplete="family-name"
+                  error={errors.lastName || realTimeErrors.lastName}
                 />
               </div>
               {(errors.lastName || realTimeErrors.lastName) && <p className="text-red-400 text-sm mt-1">{errors.lastName || realTimeErrors.lastName}</p>}
@@ -343,21 +348,20 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
+              <Input
                 type="email"
                 value={formData.email}
-                onChange={async (e) => {
+                onChange={async e => {
                   const value = e.target.value;
                   setFormData(prev => ({ ...prev, email: value }));
                   const error = await validateField('email', value);
                   setRealTimeErrors(prev => ({ ...prev, email: error }));
                 }}
                 onBlur={() => setTouchedFields(prev => ({ ...prev, email: true }))}
-                className={`w-full bg-gray-800 border-2 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base ${
-                  errors.email || realTimeErrors.email ? 'border-red-500' : (touchedFields.email && formData.email.trim() && formData.email.includes('@')) ? 'border-green-500' : 'border-gray-600'
-                } [&:not(:placeholder-shown)]:bg-gray-800`}
+                leftIcon={<Mail className="w-5 h-5 text-gray-400" />}
                 placeholder="esempio@email.com"
                 autoComplete="email"
+                error={errors.email || realTimeErrors.email}
               />
             </div>
             {(errors.email || realTimeErrors.email) && <p className="text-red-400 text-sm mt-1">{errors.email || realTimeErrors.email}</p>}
@@ -434,18 +438,16 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
             </label>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
+              <Input
                 type="date"
                 value={formData.birthDate}
-                onChange={(e) => {
-                    const selectedDate = e.target.value;
-                    setFormData(prev => ({ ...prev, birthDate: selectedDate }));
-                    
-                    // Valida la data di nascita in tempo reale
-                    validateField('birthDate', selectedDate).then(error => {
-                      setRealTimeErrors(prev => ({ ...prev, birthDate: error }));
-                    });
-                  }}
+                onChange={e => {
+                  const selectedDate = e.target.value;
+                  setFormData(prev => ({ ...prev, birthDate: selectedDate }));
+                  validateField('birthDate', selectedDate).then(error => {
+                    setRealTimeErrors(prev => ({ ...prev, birthDate: error }));
+                  });
+                }}
                 min="1920-01-01"
                 max={(() => {
                   const date = new Date();
@@ -453,10 +455,8 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
                   return date.toISOString().split('T')[0];
                 })()}
                 onBlur={() => setTouchedFields(prev => ({ ...prev, birthDate: true }))}
-                className={`w-full bg-gray-800 border-2 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base font-medium ${
-                  errors.birthDate || realTimeErrors.birthDate ? 'border-red-500' : (touchedFields.birthDate && formData.birthDate) ? 'border-green-500' : 'border-gray-600'
-                } [&::-webkit-calendar-picker-indicator]:hidden [&:not(:placeholder-shown)]:bg-gray-800`}
-                onClick={(e) => e.preventDefault()}
+                leftIcon={<Calendar className="w-5 h-5 text-gray-400" />}
+                error={errors.birthDate || realTimeErrors.birthDate}
               />
             </div>
             {(errors.birthDate || realTimeErrors.birthDate) && <p className="text-red-400 text-sm mt-1">{errors.birthDate || realTimeErrors.birthDate}</p>}
@@ -526,58 +526,34 @@ const Registration: React.FC<RegistrationProps> = ({ onNavigate }) => {
 
           {/* Privacy Checkboxes */}
           <div className="space-y-3 mt-4">
-            <div>
-              <label className="flex items-start">
-                <input
-                  type="checkbox"
-                  checked={formData.privacyPolicy}
-                  onChange={(e) => setFormData({ ...formData, privacyPolicy: e.target.checked })}
-                  className="mt-1 mr-2"
-                />
-                <span className="text-sm text-gray-300">
-                  Dichiaro di aver letto e compreso l'<a href="#" className="text-blue-400 hover:underline">informativa sulla privacy</a> e acconsento al trattamento dei miei dati personali per le finalità descritte. <span className="text-red-500">*</span>
-                </span>
-              </label>
-              {errors.privacyPolicy && <p className="text-red-500 text-xs mt-1">{errors.privacyPolicy}</p>}
-            </div>
-            
-            <div>
-              <label className="flex items-start">
-                <input
-                  type="checkbox"
-                  checked={formData.marketingConsent}
-                  onChange={(e) => setFormData({ ...formData, marketingConsent: e.target.checked })}
-                  className="mt-1 mr-2"
-                />
-                <span className="text-sm text-gray-300">
-                  Acconsento a ricevere comunicazioni promozionali e newsletter da Free to Smoke.
-                </span>
-              </label>
-            </div>
-            
-            <div>
-              <label className="flex items-start">
-                <input
-                  type="checkbox"
-                  checked={formData.termsAndConditions}
-                  onChange={(e) => setFormData({ ...formData, termsAndConditions: e.target.checked })}
-                  className="mt-1 mr-2"
-                />
-                <span className="text-sm text-gray-300">
-                  Accetto i <a href="#" className="text-blue-400 hover:underline">termini e condizioni</a> del servizio. <span className="text-red-500">*</span>
-                </span>
-              </label>
-              {errors.termsAndConditions && <p className="text-red-500 text-xs mt-1">{errors.termsAndConditions}</p>}
-            </div>
+            <Checkbox
+              checked={formData.privacyPolicy}
+              onChange={e => setFormData({ ...formData, privacyPolicy: e.target.checked })}
+              label={<span>Dichiaro di aver letto e compreso l'<a href="#" className="text-blue-400 hover:underline">informativa sulla privacy</a> e acconsento al trattamento dei miei dati personali per le finalità descritte. <span className="text-red-500">*</span></span>}
+              error={errors.privacyPolicy}
+            />
+            <Checkbox
+              checked={formData.marketingConsent}
+              onChange={e => setFormData({ ...formData, marketingConsent: e.target.checked })}
+              label={<span>Acconsento a ricevere comunicazioni promozionali e newsletter da Free to Smoke.</span>}
+            />
+            <Checkbox
+              checked={formData.termsAndConditions}
+              onChange={e => setFormData({ ...formData, termsAndConditions: e.target.checked })}
+              label={<span>Accetto i <a href="#" className="text-blue-400 hover:underline">termini e condizioni</a> del servizio. <span className="text-red-500">*</span></span>}
+              error={errors.termsAndConditions}
+            />
           </div>
           
           {/* Submit Button */}
-          <button
+          <Button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform active:scale-[0.98] mt-8 text-lg shadow-lg fixed sm:relative bottom-4 sm:bottom-auto left-0 right-0 mx-auto max-w-[calc(100%-2rem)] sm:max-w-full"
+            variant="primary"
+            size="lg"
+            className="w-full font-semibold py-4 px-6 mt-8 text-lg shadow-lg fixed sm:relative bottom-4 sm:bottom-auto left-0 right-0 mx-auto max-w-[calc(100%-2rem)] sm:max-w-full"
           >
             Registrati
-          </button>
+          </Button>
           
           {/* Spacer per il pulsante fisso su mobile */}
           <div className="h-16 sm:h-0"></div>

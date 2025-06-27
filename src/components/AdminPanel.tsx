@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Input } from './ui/Input';
+import Textarea from './ui/Textarea';
+import { Button } from './ui/Button';
 import { ArrowLeft, Search, Plus, Minus, Users, Gift, Settings, Bell, Mail, Lock, Eye, EyeOff, X, Shield, BarChart } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -295,13 +298,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     await firebaseService.setAdminAuth(false);
     setLoginForm({ email: '', password: '' });
     setActiveTab('customers');
-    
+    // Rimuovi eventuali token/sessioni admin
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('admin_token');
+      sessionStorage.removeItem('admin_token');
+      sessionStorage.removeItem('current_user_id');
+    }
     // Esegui il logout sicuro
     logout();
-    
     // Registra il logout
     logSecurityEvent(SecurityEventType.LOGOUT, 'admin', 'Logout amministratore');
-    
+    // Naviga alla home
     onNavigate('home');
   };
 
@@ -393,22 +400,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
        let comparison = 0;
        
        switch (sortBy) {
-         case 'name':
+         case 'name': {
            comparison = a.firstName.localeCompare(b.firstName);
            break;
-         case 'surname':
+         }
+         case 'surname': {
            comparison = a.lastName.localeCompare(b.lastName);
            break;
-         case 'points':
+         }
+         case 'points': {
            comparison = a.points - b.points;
            break;
-         case 'birthDate':
+         }
+         case 'birthDate': {
            const dateA = a.birthDate ? new Date(a.birthDate).getTime() : 0;
            const dateB = b.birthDate ? new Date(b.birthDate).getTime() : 0;
            comparison = dateA - dateB;
            break;
-         default:
+         }
+         default: {
            comparison = 0;
+         }
        }
        
        return sortOrder === 'desc' ? -comparison : comparison;
@@ -684,12 +696,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
         />
 
         <div className="flex items-center p-6">
-          <button
+          <Button
             onClick={() => onNavigate('home')}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
+            variant="ghost"
+            size="sm"
+            className="text-gray-400 hover:text-white transition-colors p-0"
+            leftIcon={<ArrowLeft className="w-6 h-6" />}
+            aria-label="Torna alla home"
+          />
           <h1 className="text-xl font-semibold text-white ml-4">Admin Login</h1>
         </div>
 
@@ -721,11 +735,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <input
+                  <Input
                     type="email"
                     value={loginForm.email}
-                    onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-600 rounded-xl py-3 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={e => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
+                    leftIcon={<Mail className="w-5 h-5 text-gray-400" />}
+                    className="py-3"
                     placeholder="admin@freetosmoke.com"
                     autoFocus
                   />
@@ -738,29 +753,37 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <input
+                  <Input
                     type={showPassword ? 'text' : 'password'}
                     value={loginForm.password}
-                    onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-600 rounded-xl py-3 pl-11 pr-12 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={e => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                    leftIcon={<Lock className="w-5 h-5 text-gray-400" />}
+                    rightIcon={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="absolute right-3 top-3 text-gray-400 hover:text-white p-0"
+                        onClick={() => setShowPassword(!showPassword)}
+                        tabIndex={-1}
+                        aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </Button>
+                    }
+                    className="pr-12 py-3"
                     placeholder="Inserisci la password"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3 text-gray-400 hover:text-white transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
                 </div>
               </div>
 
-              <button
+              <Button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
+                variant="primary"
+                size="lg"
+                className="w-full font-semibold py-3 px-6"
               >
                 Accedi
-              </button>
+              </Button>
             </form>
             )
             }
@@ -790,94 +813,79 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       {/* Header */}
       <div className="flex items-center justify-between p-6">
         <div className="flex items-center">
-          <button
+          <Button
             onClick={() => onNavigate('home')}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
+            variant="ghost"
+            className="text-gray-400 hover:text-white transition-colors p-0 w-10 h-10 flex items-center justify-center"
+            leftIcon={<ArrowLeft className="w-6 h-6" />}
+            aria-label="Torna alla home"
+          />
           <div className="flex items-center ml-4">
             <img src="/Logo senza sfondo Free to smoke.png" alt="Free to Smoke Logo" className="h-8 mr-3" />
             <h1 className="text-xl font-semibold text-white">Pannello Admin</h1>
           </div>
         </div>
-        <button
+        <Button
           onClick={handleLogout}
-          className="text-red-400 hover:text-red-300 text-sm"
+          variant="error"
+          size="sm"
+          className="text-sm"
         >
           Logout
-        </button>
+        </Button>
       </div>
 
       {/* Tabs */}
       <div className="px-6 mb-6">
         <div className="flex space-x-1 bg-gray-800/50 p-1 rounded-xl">
-          <button
+          <Button
+            variant={activeTab === 'customers' ? 'primary' : 'ghost'}
+            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${activeTab === 'customers' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
             onClick={() => setActiveTab('customers')}
-            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'customers'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            leftIcon={<Users className="w-4 h-4 mr-2" />}
           >
-            <Users className="w-4 h-4 mr-2" />
             Clienti
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={activeTab === 'add-customer' ? 'primary' : 'ghost'}
+            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${activeTab === 'add-customer' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
             onClick={() => setActiveTab('add-customer')}
-            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'add-customer'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            leftIcon={<Plus className="w-4 h-4 mr-2" />}
           >
-            <Plus className="w-4 h-4 mr-2" />
             Aggiungi Cliente
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={activeTab === 'prizes' ? 'primary' : 'ghost'}
+            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${activeTab === 'prizes' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
             onClick={() => setActiveTab('prizes')}
-            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'prizes'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            leftIcon={<Gift className="w-4 h-4 mr-2" />}
           >
-            <Gift className="w-4 h-4 mr-2" />
             Premi
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={activeTab === 'notifications' ? 'primary' : 'ghost'}
+            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${activeTab === 'notifications' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
             onClick={() => setActiveTab('notifications')}
-            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'notifications'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            leftIcon={<Bell className="w-4 h-4 mr-2" />}
           >
-            <Bell className="w-4 h-4 mr-2" />
             Notifiche
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={activeTab === 'statistics' ? 'primary' : 'ghost'}
+            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${activeTab === 'statistics' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
             onClick={() => setActiveTab('statistics')}
-            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'statistics'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            leftIcon={<BarChart className="w-4 h-4 mr-2" />}
           >
-            <BarChart className="w-4 h-4 mr-2" />
             Statistiche
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={activeTab === 'settings' ? 'primary' : 'ghost'}
+            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
             onClick={() => setActiveTab('settings')}
-            className={`flex-1 flex items-center justify-center py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'settings'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            leftIcon={<Settings className="w-4 h-4 mr-2" />}
           >
-            <Settings className="w-4 h-4 mr-2" />
             Impostazioni
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -888,13 +896,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
             {/* Search and Sort */}
             <div className="space-y-4">
               <div className="relative">
-                <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <input
+                <Input
                   type="text"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-600 rounded-xl py-3 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={e => setSearchTerm(e.target.value)}
+                  leftIcon={<Search className="w-5 h-5" />}
                   placeholder="Cerca per nome, email o cellulare..."
+                  className="pl-11"
                 />
               </div>
               
@@ -904,7 +912,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                    <label className="text-gray-300 text-sm font-medium">Ordina per:</label>
                    <select
                      value={sortBy}
-                     onChange={(e) => setSortBy(e.target.value as any)}
+                     onChange={(e) => setSortBy(e.target.value as 'name' | 'surname' | 'points' | 'birthDate')}
                      className="bg-gray-800 border border-gray-600 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                    >
                      <option value="name">Nome</option>
@@ -951,28 +959,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                     <label className="block text-gray-300 text-sm font-medium mb-2">
                       Punti da aggiungere/riscattare
                     </label>
-                    <input
+                    <Input
                       type="number"
                       value={pointsInput}
-                      onChange={(e) => setPointsInput(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white"
+                      onChange={e => setPointsInput(e.target.value)}
                       placeholder="es. 100"
+                      className="w-full"
+                      min={0}
+                      inputMode="numeric"
                     />
                   </div>
-                  <button
+                  <Button
+                    variant="success"
+                    size="md"
+                    leftIcon={<Plus className="w-4 h-4" />}
                     onClick={() => handlePointsOperation('add')}
-                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-xl flex items-center space-x-2 transition-colors"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Aggiungi</span>
-                  </button>
-                  <button
+                    Aggiungi
+                  </Button>
+                  <Button
+                    variant="error"
+                    size="md"
+                    leftIcon={<Minus className="w-4 h-4" />}
                     onClick={() => handlePointsOperation('redeem')}
-                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl flex items-center space-x-2 transition-colors"
                   >
-                    <Minus className="w-4 h-4" />
-                    <span>Riscatta</span>
-                  </button>
+                    Riscatta
+                  </Button>
                 </div>
                 
                 {/* Transaction History */}
@@ -1051,7 +1063,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                 
                 {/* Delete Customer Button */}
                 <div className="mt-4 border-t border-gray-700 pt-4">
-                  <button
+                  <Button
+                    variant="error"
+                    size="md"
+                    className="w-full justify-center"
+                    leftIcon={<X className="w-4 h-4" />}
                     onClick={async () => {
                       if (window.confirm(`Sei sicuro di voler eliminare il cliente ${selectedCustomer.firstName} ${selectedCustomer.lastName}? Questa azione non può essere annullata.`)) {
                         try {
@@ -1076,11 +1092,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                         }
                       }
                     }}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl flex items-center justify-center space-x-2 transition-colors"
                   >
-                    <X className="w-4 h-4" />
-                    <span>Elimina Cliente</span>
-                  </button>
+                    Elimina Cliente
+                  </Button>
                 </div>
               </div>
             )}
@@ -1128,14 +1142,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
             <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-white">Storico Notifiche Inviate</h3>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
+                <div className="relative w-80">
+                  <Input
                     type="text"
-                    placeholder="Cerca per titolo, messaggio o destinatario..."
                     value={historySearchTerm}
-                    onChange={(e) => setHistorySearchTerm(e.target.value)}
-                    className="bg-gray-800 border border-gray-600 rounded-xl py-2 pl-10 pr-4 text-white text-sm w-80"
+                    onChange={e => setHistorySearchTerm(e.target.value)}
+                    leftIcon={<Search className="w-4 h-4" />}
+                    placeholder="Cerca per titolo, messaggio o destinatario..."
+                    className="pl-10 pr-4 text-sm"
                   />
                 </div>
               </div>
@@ -1241,27 +1255,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
               <form onSubmit={handleAddCustomer} className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Nome <span className="text-red-500">*</span>
-                    </label>
-                    <input
+                    <Input
+                      label="Nome *"
                       type="text"
                       value={customerForm.firstName}
-                      onChange={(e) => setCustomerForm(prev => ({ ...prev, firstName: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={e => setCustomerForm(prev => ({ ...prev, firstName: e.target.value }))}
                       placeholder="es. Mario"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Cognome <span className="text-red-500">*</span>
-                    </label>
-                    <input
+                    <Input
+                      label="Cognome *"
                       type="text"
                       value={customerForm.lastName}
-                      onChange={(e) => setCustomerForm(prev => ({ ...prev, lastName: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={e => setCustomerForm(prev => ({ ...prev, lastName: e.target.value }))}
                       placeholder="es. Rossi"
                       required
                     />
@@ -1270,50 +1278,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                 
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Email <span className="text-red-500">*</span>
-                    </label>
-                    <input
+                    <Input
+                      label="Email *"
                       type="email"
                       value={customerForm.email}
-                      onChange={(e) => setCustomerForm(prev => ({ ...prev, email: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={e => setCustomerForm(prev => ({ ...prev, email: e.target.value }))}
                       placeholder="es. mario.rossi@email.com"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Numero di Cellulare <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2 text-gray-400 text-sm">+39</span>
-                      <input
-                        type="tel"
-                        value={customerForm.phone.replace('+39', '')}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                          setCustomerForm(prev => ({ ...prev, phone: '+39' + value }));
-                        }}
-                        className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="3331234567"
-                        maxLength={10}
-                        pattern="[0-9]{10}"
-                        required
-                      />
-                    </div>
+                    <Input
+                      label="Numero di Cellulare *"
+                      type="tel"
+                      value={customerForm.phone.replace('+39', '')}
+                      onChange={e => {
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setCustomerForm(prev => ({ ...prev, phone: '+39' + value }));
+                      }}
+                      leftIcon={"+39"}
+                      placeholder="3331234567"
+                      maxLength={10}
+                      pattern="[0-9]{10}"
+                      required
+                    />
                   </div>
                 </div>
                 
                 <div>
-                  <label className="block text-gray-300 text-sm font-medium mb-2">
-                    Data di Nascita <span className="text-red-500">*</span>
-                  </label>
-                  <input
+                  <Input
+                    label="Data di Nascita *"
                     type="date"
                     value={customerForm.birthDate}
-                    onChange={(e) => setCustomerForm(prev => ({ ...prev, birthDate: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={e => setCustomerForm(prev => ({ ...prev, birthDate: e.target.value }))}
                     required
                   />
                 </div>
@@ -1336,15 +1333,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                 </div>
                 
                 <div className="flex gap-4">
-                  <button
+                  <Button
                     type="submit"
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors flex items-center justify-center space-x-2"
+                    variant="success"
+                    size="md"
+                    leftIcon={<Plus className="w-5 h-5" />}
+                    className="flex-1 justify-center"
                   >
-                    <Plus className="w-5 h-5" />
-                    <span>Aggiungi Cliente</span>
-                  </button>
-                  <button
+                    Aggiungi Cliente
+                  </Button>
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="md"
                     onClick={() => {
                       setCustomerForm({
                         firstName: '',
@@ -1354,10 +1355,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                         birthDate: ''
                       });
                     }}
-                    className="bg-gray-600 hover:bg-gray-700 text-white py-3 px-6 rounded-xl transition-colors"
                   >
                     Reset
-                  </button>
+                  </Button>
                 </div>
               </form>
             </div>
@@ -1373,39 +1373,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
               <form onSubmit={handleAddPrize} className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Nome Premio <span className="text-red-500">*</span>
-                    </label>
-                    <input
+                    <Input
+                      label="Nome Premio *"
                       type="text"
                       value={prizeForm.name}
-                      onChange={(e) => setPrizeForm(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white"
+                      onChange={e => setPrizeForm(prev => ({ ...prev, name: e.target.value }))}
                       placeholder="es. Sconto 10€"
+                      required
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Punti Richiesti <span className="text-red-500">*</span>
-                    </label>
-                    <input
+                    <Input
+                      label="Punti Richiesti *"
                       type="number"
                       value={prizeForm.pointsRequired}
-                      onChange={(e) => setPrizeForm(prev => ({ ...prev, pointsRequired: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white"
+                      onChange={e => setPrizeForm(prev => ({ ...prev, pointsRequired: e.target.value }))}
                       placeholder="es. 1000"
+                      required
                     />
                   </div>
                 </div>
                 
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Livello Richiesto
-                    </label>
+                    <label className="block text-gray-300 text-sm font-medium mb-2">Livello Richiesto</label>
                     <select
                       value={prizeForm.requiredLevel}
-                      onChange={(e) => setPrizeForm(prev => ({ ...prev, requiredLevel: e.target.value }))}
+                      onChange={e => setPrizeForm(prev => ({ ...prev, requiredLevel: e.target.value }))}
                       className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white"
                     >
                       <option value="0">Nessun livello richiesto</option>
@@ -1417,14 +1411,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Immagine
-                    </label>
-                    <input
+                    <Input
+                      label="Immagine"
                       type="file"
                       accept="image/*"
                       onChange={handlePrizeImageUpload}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white"
                     />
                   </div>
                 </div>
@@ -1443,23 +1434,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                 )}
                 
                 <div>
-                  <label className="block text-gray-300 text-sm font-medium mb-2">
-                    Descrizione <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
+                  <label className="block text-gray-300 text-sm font-medium mb-2">Descrizione *</label>
+                  <Textarea
                     value={prizeForm.description}
-                    onChange={(e) => setPrizeForm(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white"
+                    onChange={e => setPrizeForm(prev => ({ ...prev, description: e.target.value }))}
                     rows={3}
                     placeholder="Descrizione del premio..."
+                    required
                   />
                 </div>
-                <button
+                <Button
                   type="submit"
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-xl transition-colors"
+                  variant="success"
+                  size="md"
+                  className="px-6 py-2"
                 >
                   Aggiungi Premio
-                </button>
+                </Button>
               </form>
             </div>
 
@@ -1521,15 +1512,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
               <form onSubmit={handleAddNotification} className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Titolo
-                    </label>
-                    <input
+                    <Input
+                      label="Titolo"
                       type="text"
                       value={notificationForm.title}
-                      onChange={(e) => setNotificationForm(prev => ({ ...prev, title: e.target.value }))}
-                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white"
+                      onChange={e => setNotificationForm(prev => ({ ...prev, title: e.target.value }))}
                       placeholder="es. Offerta Speciale"
+                      required
                     />
                   </div>
                   <div>
@@ -1538,7 +1527,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                     </label>
                     <select
                       value={notificationForm.type}
-                      onChange={(e) => setNotificationForm(prev => ({ ...prev, type: e.target.value as 'info' | 'promo' | 'offer' }))}
+                      onChange={e => setNotificationForm(prev => ({ ...prev, type: e.target.value as 'info' | 'promo' | 'offer' }))}
                       className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white"
                     >
                       <option value="info">Informazione</option>
@@ -1548,23 +1537,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-gray-300 text-sm font-medium mb-2">
-                    Messaggio
-                  </label>
-                  <textarea
+                  <Textarea
+                    label="Messaggio"
                     value={notificationForm.message}
-                    onChange={(e) => setNotificationForm(prev => ({ ...prev, message: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-600 rounded-xl py-2 px-4 text-white"
+                    onChange={e => setNotificationForm(prev => ({ ...prev, message: e.target.value }))}
                     rows={3}
                     placeholder="Messaggio della notifica..."
+                    required
                   />
                 </div>
-                <button
+                <Button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl transition-colors"
+                  variant="primary"
+                  size="md"
+                  className="px-6 py-2"
                 >
                   Aggiungi Notifica
-                </button>
+                </Button>
               </form>
             </div>
 

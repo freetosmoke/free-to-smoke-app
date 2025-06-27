@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Phone, Shield, Lock, Eye, EyeOff, X } from 'lucide-react';
 import * as firebaseService from '../utils/firebase';
 import Toast from './Toast';
+import { Input } from './ui/Input';
+import { Button } from './ui/Button';
 import { sanitizeInput } from '../utils/security';
 import { generateCsrfToken, validateCsrfToken, setupSecurityProtections, rateLimiter } from '../utils/security';
 import { authenticateCustomer, isAuthenticated } from '../utils/auth';
@@ -42,11 +44,20 @@ const Login: React.FC<LoginProps> = ({ onNavigate }) => {
       // Reindirizza se l'utente è già autenticato
       const authenticated = await isAuthenticated();
       if (authenticated) {
+        // Se l'utente è autenticato ma non esiste più current_user_id, effettua logout forzato
+        const userId = sessionStorage.getItem('current_user_id');
+        const adminId = sessionStorage.getItem('current_admin_id');
+        if (!userId) {
+          if (userId) await firebaseService.removeAuthToken(userId);
+          if (adminId) await firebaseService.removeAdminToken(adminId);
+          sessionStorage.clear();
+          localStorage.clear();
+          return;
+        }
         onNavigate('profile');
         return;
       }
     };
-    
     checkAuth();
     
     // Imposta le protezioni di sicurezza
@@ -335,12 +346,15 @@ const Login: React.FC<LoginProps> = ({ onNavigate }) => {
 
       {/* Header */}
       <div className="flex items-center p-6">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Torna alla home"
           onClick={() => onNavigate('home', null)}
-          className="text-gray-400 hover:text-white transition-colors"
+          className="rounded-full p-2 text-gray-400 hover:text-white transition-colors"
         >
           <ArrowLeft className="w-6 h-6" />
-        </button>
+        </Button>
         <div className="flex items-center ml-4">
           <img src="/Logo senza sfondo Free to smoke.png" alt="Free to Smoke Logo" className="h-14 mr-3" />
           <h1 className="text-xl font-semibold text-white">Accedi</h1>
@@ -370,71 +384,73 @@ const Login: React.FC<LoginProps> = ({ onNavigate }) => {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Campo nascosto per il token CSRF */}
               <input type="hidden" name="csrf_token" value={csrfToken} />
-            <div>
-              <label className="block text-gray-300 text-sm font-medium mb-2">
-                Numero di cellulare
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <div className="w-full overflow-visible">
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => {
-                      const input = e.target.value;
-                      
-                      // Se l'utente tenta di cancellare completamente, mantieni almeno il prefisso
-                      if (input === '') {
-                        setPhone('+39 ');
-                        return;
-                      }
-                      
-                      // Se l'utente tenta di modificare o rimuovere il prefisso
-                      if (!input.startsWith('+39')) {
-                        // Estrai solo le cifre dall'input
-                        const digits = input.replace(/\D/g, '');
-                        // Limita a 10 cifre
-                        const limitedDigits = digits.substring(0, 10);
-                        // Formatta con il prefisso
-                        setPhone('+39 ' + limitedDigits);
-                      } else {
-                        // Gestisci normalmente l'input che mantiene il prefisso
-                        // Estrai le cifre dopo il prefisso +39
-                        const prefixRemoved = input.substring(3); // Rimuovi '+39'
-                        const digits = prefixRemoved.replace(/\D/g, '');
-                        // Limita a 10 cifre
-                        const limitedDigits = digits.substring(0, 10);
-                        // Formatta con il prefisso
-                        setPhone('+39 ' + limitedDigits);
-                      }
-                    }}
-                    className="w-full bg-gray-800 border border-gray-600 rounded-xl py-3 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 text-base font-medium text-lg"
-                    placeholder="+39 123 456 7890"
-                    autoFocus
-                    maxLength={14} // +39 + 10 cifre + eventuali spazi
-                  />
-                </div>
+              
+              <div>
+                <Input
+                  label="Numero di cellulare"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    const input = e.target.value;
+                    
+                    // Se l'input è vuoto, ripristina il prefisso
+                    if (input === '') {
+                      setPhone('+39 ');
+                      return;
+                    }
+                    
+                    // Se l'utente sta cancellando e arriva al prefisso, mantienilo
+                    if (input.length < 4) {
+                      setPhone('+39 ');
+                      return;
+                    }
+                    
+                    // Se l'input non inizia con +39, aggiungilo
+                    if (!input.startsWith('+39')) {
+                      const digits = input.replace(/\D/g, '');
+                      const limitedDigits = digits.substring(0, 10);
+                      setPhone('+39 ' + limitedDigits);
+                    } else {
+                      // Gestisci normalmente l'input che mantiene il prefisso
+                      // Estrai le cifre dopo il prefisso +39
+                      const prefixRemoved = input.substring(3); // Rimuovi '+39'
+                      const digits = prefixRemoved.replace(/\D/g, '');
+                      // Limita a 10 cifre
+                      const limitedDigits = digits.substring(0, 10);
+                      // Formatta con il prefisso
+                      setPhone('+39 ' + limitedDigits);
+                    }
+                  }}
+                  leftIcon={<Phone className="w-5 h-5" />}
+                  className="focus:ring-green-500 text-base font-medium text-lg"
+                  placeholder="+39 123 456 7890"
+                  autoFocus
+                  maxLength={14}
+                />
               </div>
-            </div>
 
-            <button
+            <Button
               type="submit"
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-[1.02]"
+              variant="success"
+              size="lg"
+              className="w-full py-4 transition-all duration-200 transform hover:scale-[1.02]"
             >
               Accedi
-            </button>
+            </Button>
           </form>
           )}
 
           <div className="text-center mt-6 space-y-3">
             <p className="text-gray-400 text-sm">
               Non hai ancora un account?{' '}
-              <button
+              <Button
                 onClick={() => onNavigate('register')}
-                className="text-blue-400 hover:text-blue-300 font-medium"
+                variant="ghost"
+                size="sm"
+                className="text-blue-400 hover:text-blue-300 font-medium p-0 h-auto"
               >
                 Registrati
-              </button>
+              </Button>
             </p>
 
           </div>
@@ -450,12 +466,14 @@ const Login: React.FC<LoginProps> = ({ onNavigate }) => {
                 {recoveryStep === 'questions' && 'Recupera Password Admin'}
                 {recoveryStep === 'newPassword' && 'Nuova Password'}
               </h3>
-              <button
+              <Button
                 onClick={closePasswordRecovery}
-                className="text-gray-400 hover:text-white transition-colors"
+                variant="ghost"
+                size="sm"
+                className="text-gray-400 hover:text-white transition-colors p-1 h-auto"
               >
                 <X className="w-6 h-6" />
-              </button>
+              </Button>
             </div>
             
             <form onSubmit={handlePasswordRecovery} className="space-y-4">
@@ -485,51 +503,49 @@ const Login: React.FC<LoginProps> = ({ onNavigate }) => {
                     </div>
                   </div>
                   
-                  <label className="block text-gray-300 text-sm font-medium mb-2">
-                    {securityQuestions[currentQuestionIndex]}
-                  </label>
-                  <input
+                  <Input
                     type="text"
+                    label={securityQuestions[currentQuestionIndex]}
                     value={recoveryForm.securityAnswers[currentQuestionIndex]}
                     onChange={(e) => {
                       const newAnswers = [...recoveryForm.securityAnswers];
                       newAnswers[currentQuestionIndex] = e.target.value;
                       setRecoveryForm(prev => ({ ...prev, securityAnswers: newAnswers }));
                     }}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Inserisci la tua risposta"
                     required
                   />
                   
                   <div className="flex justify-between mt-6">
                     {currentQuestionIndex > 0 && (
-                      <button
+                      <Button
                         type="button"
                         onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
-                        className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                        variant="ghost"
+                        className="text-gray-400 hover:text-white transition-colors"
                       >
                         ← Precedente
-                      </button>
+                      </Button>
                     )}
                     
                     <div className="ml-auto">
                       {currentQuestionIndex < securityQuestions.length - 1 ? (
-                        <button
+                        <Button
                           type="button"
                           onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
-                          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
+                          variant="primary"
                           disabled={!recoveryForm.securityAnswers[currentQuestionIndex]}
                         >
                           Successiva →
-                        </button>
+                        </Button>
                       ) : (
-                        <button
+                        <Button
                           type="submit"
-                          className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-colors"
+                          variant="success"
                           disabled={!recoveryForm.securityAnswers[currentQuestionIndex]}
                         >
                           Verifica Risposte
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -539,60 +555,56 @@ const Login: React.FC<LoginProps> = ({ onNavigate }) => {
               {recoveryStep === 'newPassword' && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Nuova Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                      <input
-                        type={showNewPassword ? 'text' : 'password'}
-                        value={newPasswordForm.password}
-                        onChange={(e) => setNewPasswordForm(prev => ({ ...prev, password: e.target.value }))}
-                        className="w-full bg-gray-700 border border-gray-600 rounded-xl py-3 pl-11 pr-12 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Inserisci la nuova password"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 top-3 text-gray-400 hover:text-white transition-colors"
-                      >
-                        {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
-                    </div>
+                    <Input
+                      type={showNewPassword ? 'text' : 'password'}
+                      label="Nuova Password"
+                      value={newPasswordForm.password}
+                      onChange={(e) => setNewPasswordForm(prev => ({ ...prev, password: e.target.value }))}
+                      leftIcon={<Lock className="w-5 h-5" />}
+                      rightIcon={
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
+                          {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      }
+                      placeholder="Inserisci la nuova password"
+                      required
+                    />
                   </div>
                   
                   <div>
-                    <label className="block text-gray-300 text-sm font-medium mb-2">
-                      Conferma Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                      <input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        value={newPasswordForm.confirmPassword}
-                        onChange={(e) => setNewPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                        className="w-full bg-gray-700 border border-gray-600 rounded-xl py-3 pl-11 pr-12 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Conferma la nuova password"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-3 text-gray-400 hover:text-white transition-colors"
-                      >
-                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
-                    </div>
+                    <Input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      label="Conferma Password"
+                      value={newPasswordForm.confirmPassword}
+                      onChange={(e) => setNewPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                      leftIcon={<Lock className="w-5 h-5" />}
+                      rightIcon={
+                         <button
+                           type="button"
+                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                           className="text-gray-400 hover:text-white transition-colors"
+                         >
+                           {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                         </button>
+                       }
+                      placeholder="Conferma la nuova password"
+                      required
+                    />
                   </div>
                   
-                  <button
+                  <Button
                     type="submit"
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors mt-6"
+                    variant="success"
+                    size="lg"
+                    className="w-full mt-6"
                     disabled={!newPasswordForm.password || !newPasswordForm.confirmPassword}
                   >
                     Aggiorna Password
-                  </button>
+                  </Button>
                 </div>
               )}
             </form>
