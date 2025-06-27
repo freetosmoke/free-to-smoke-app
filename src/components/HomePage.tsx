@@ -17,7 +17,21 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
   const [showSecretForm, setShowSecretForm] = useState(false);
   const [secretCode, setSecretCode] = useState('');
   const [secretError, setSecretError] = useState('');
-  // Rimuovi completamente qualsiasi dichiarazione di debug se presente
+
+  // useEffect temporaneo per creare l'admin
+  useEffect(() => {
+    const createAdmin = async () => {
+      try {
+        await firebaseService.setupAdminAccount('admin@freetosmoke.com', 'Admin123!');
+        console.log('Admin creato con successo!');
+      } catch (error) {
+        console.log('Admin già esistente o errore:', error);
+      }
+    };
+    
+    // Esegui solo una volta
+    createAdmin();
+  }, []);
 
   // Reset del contatore dopo 3 secondi
   useEffect(() => {
@@ -41,13 +55,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
     }
   };
 
-  // Logo con onClick corretto
-  <img 
-    src="/Logo senza sfondo Free to smoke.png" 
-    alt="Free To Smoke Logo" 
-    className="h-40 mb-0 cursor-pointer transition-transform duration-200 hover:scale-105" 
-    onClick={handleLogoClick}
-  />
   // Gestione del form segreto
   const handleSecretSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,7 +110,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
     };
     
     checkAuth();
-  }, [loggedInCustomer, logout]); // Assicurati che queste dipendenze siano presenti
+  }, [loggedInCustomer, logout]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -299,8 +306,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
             <span className="text-blue-400 font-semibold">1€ speso = 1 punto</span>
           </div>
         </div>
-
-        {/* Action Buttons rimossi da qui e spostati in alto */}
       </div>
 
       {/* Instagram Link - Migliorato */}
