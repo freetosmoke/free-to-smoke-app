@@ -41,6 +41,13 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
     }
   };
 
+  // Logo con onClick corretto
+  <img 
+    src="/Logo senza sfondo Free to smoke.png" 
+    alt="Free To Smoke Logo" 
+    className="h-40 mb-0 cursor-pointer transition-transform duration-200 hover:scale-105" 
+    onClick={handleLogoClick}
+  />
   // Gestione del form segreto
   const handleSecretSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +90,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
     const checkAuth = async () => {
       if (loggedInCustomer) {
         try {
-          const isValid = await firebaseService.validateCustomerSession(loggedInCustomer.id);
+          const isValid = await firebaseService.auth.currentUser !== null;
           if (!isValid) {
             console.log('Sessione non valida, effettuo logout');
             await logout();
