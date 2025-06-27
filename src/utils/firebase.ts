@@ -979,6 +979,74 @@ export const verifySecurityAnswers = async (answers: string[]): Promise<boolean>
   }
 };
 
+// Funzione per validare la sessione utente
+export const validateUserSession = async (): Promise<boolean> => {
+  try {
+    // Verifica se c'è un utente autenticato
+    if (!auth.currentUser) {
+      return false;
+    }
+    
+    // Verifica se il token è ancora valido
+    const token = await auth.currentUser.getIdToken(true); // force refresh
+    
+    if (!token) {
+      return false;
+    }
+    
+    // Verifica se l'utente esiste ancora nel database
+    const userId = auth.currentUser.uid;
+    const userRef = doc(db, COLLECTIONS.CUSTOMERS, userId);
+    const userDoc = await getDoc(userRef);
+    
+    return userDoc.exists();
+  } catch (error) {
+    console.error('Errore durante la validazione della sessione:', error);
+    return false;
+  }
+};
+
+// Funzioni per la gestione del codice segreto
+export const getSecretCode = async (): Promise<string> => {
+  try {
+    const secretCodeRef = doc(db, COLLECTIONS.SETTINGS, 'secret_code');
+    const secretCodeDoc = await getDoc(secretCodeRef);
+    
+    if (secretCodeDoc.exists()) {
+      const data = secretCodeDoc.data();
+      return data.code || 'FTS2025'; // Fallback al codice di default
+    }
+    
+    // Se non esiste, restituisce il codice di default
+    return 'FTS2025';
+  } catch (error) {
+    console.error('Errore durante il recupero del codice segreto:', error);
+    return 'FTS2025'; // Fallback in caso di errore
+  }
+};
+
+export const setSecretCode = async (newCode: string): Promise<void> => {
+  try {
+    // Validazione del codice
+    if (!newCode || newCode.trim().length < 4) {
+      throw new Error('Il codice segreto deve essere di almeno 4 caratteri');
+    }
+    
+    const secretCodeRef = doc(db, COLLECTIONS.SETTINGS, 'secret_code');
+    await setDoc(secretCodeRef, {
+      code: newCode.trim(),
+      lastUpdated: Timestamp.now(),
+      updatedBy: 'admin'
+    });
+    
+    // Registra l'evento di sicurezza
+    logSecurityEvent(SecurityEventType.ADMIN_ACCESS, 'admin', 'Codice segreto aggiornato');
+  } catch (error) {
+    console.error('Errore durante l\'aggiornamento del codice segreto:', error);
+    throw error;
+  }
+};
+
 export default {
   app,
   db,
@@ -1022,7 +1090,6 @@ export default {
   setRateLimitAttempts,
   resetRateLimit,
   getSecurityLogs,
-  // addSecurityLog è stato spostato nel logger configurato
   clearSecurityLogs,
   saveSecurityQuestions,
   getSecurityQuestions,
@@ -1031,5 +1098,8 @@ export default {
   getAdminAuth,
   getAdminCredentials,
   setAdminCredentials,
-  validateAdminCredentials
+  validateAdminCredentials,
+  getSecretCode,
+  setSecretCode,
+  validateUserSession
 };

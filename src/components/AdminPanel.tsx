@@ -18,6 +18,7 @@ import { Bar, Line } from 'react-chartjs-2';
 import { sanitizeInput } from '../utils/security';
 import { generateCsrfToken, validateCsrfToken, setupSecurityProtections, rateLimiter } from '../utils/security';
 import { validatePasswordStrength, authenticateAdmin, isAdmin, logout } from '../utils/auth';
+import { verifyPassword } from '../utils/crypto';
 import { logSecurityEvent } from '../utils/securityLogger';
 import { Customer, Prize, Notification, NotificationHistory, PointTransaction, SecurityEventType } from '../types';
 // Rimossi import da storage.ts - ora utilizziamo solo Firebase
@@ -95,6 +96,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     newPassword: '',
     confirmPassword: ''
   });
+
+  // Secret code form state
+  const [secretCodeForm, setSecretCodeForm] = useState({
+    currentSecretCode: '',
+    newSecretCode: '',
+    confirmSecretCode: ''
+  });
+
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -337,9 +346,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       return;
     }
     
-    // Validate current password
+    // Validate current password - CORREZIONE DEL BUG
     const currentCredentials = await firebaseService.getAdminCredentials();
-    if (currentCredentials.password !== sanitizedCurrentPassword) {
+    const isCurrentPasswordValid = verifyPassword(sanitizedCurrentPassword, currentCredentials.password);
+    
+    if (!isCurrentPasswordValid) {
       setToast({ message: 'Password attuale errata', type: 'error', isVisible: true });
       logSecurityEvent(SecurityEventType.PASSWORD_CHANGE_FAILURE, 'admin', 'Tentativo di modifica credenziali con password attuale errata');
       return;
@@ -386,6 +397,65 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       console.error('Errore durante l\'aggiornamento delle credenziali:', error);
       setToast({ message: 'Errore durante l\'aggiornamento delle credenziali', type: 'error', isVisible: true });
       logSecurityEvent(SecurityEventType.PASSWORD_CHANGE_FAILURE, 'admin', 'Errore durante l\'aggiornamento delle credenziali');
+    }
+  };
+
+  const handleUpdateSecretCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Verifica il token CSRF
+    if (!validateCsrfToken(csrfToken)) {
+      setToast({ 
+        message: "Errore di sicurezza. Ricarica la pagina e riprova.", 
+        type: 'error', 
+        isVisible: true 
+      });
+      logSecurityEvent(SecurityEventType.CSRF_ATTACK, 'admin', 'Tentativo di modifica codice segreto con token CSRF non valido');
+      return;
+    }
+    
+    const { currentSecretCode, newSecretCode, confirmSecretCode } = secretCodeForm;
+    
+    if (!currentSecretCode || !newSecretCode || !confirmSecretCode) {
+      setToast({ message: 'Compila tutti i campi', type: 'error', isVisible: true });
+      return;
+    }
+    
+    // Verifica il codice segreto attuale
+    const actualCurrentCode = await firebaseService.getSecretCode();
+    if (currentSecretCode !== actualCurrentCode) {
+      setToast({ message: 'Codice segreto attuale errato', type: 'error', isVisible: true });
+      logSecurityEvent(SecurityEventType.ADMIN_ACCESS, 'admin', 'Tentativo di modifica codice segreto con codice attuale errato');
+      return;
+    }
+    
+    // Verifica che i nuovi codici coincidano
+    if (newSecretCode !== confirmSecretCode) {
+      setToast({ message: 'I nuovi codici segreti non coincidono', type: 'error', isVisible: true });
+      return;
+    }
+    
+    // Validazione lunghezza minima
+    if (newSecretCode.length < 4) {
+      setToast({ message: 'Il codice segreto deve essere di almeno 4 caratteri', type: 'error', isVisible: true });
+      return;
+    }
+    
+    try {
+      await firebaseService.setSecretCode(newSecretCode);
+      
+      // Reset form
+      setSecretCodeForm({
+        currentSecretCode: '',
+        newSecretCode: '',
+        confirmSecretCode: ''
+      });
+      
+      setToast({ message: 'Codice segreto aggiornato con successo', type: 'success', isVisible: true });
+      logSecurityEvent(SecurityEventType.ADMIN_ACCESS, 'admin', 'Codice segreto aggiornato con successo');
+    } catch (error) {
+      console.error('Errore durante l\'aggiornamento del codice segreto:', error);
+      setToast({ message: 'Errore durante l\'aggiornamento del codice segreto', type: 'error', isVisible: true });
     }
   };
 
@@ -1884,7 +1954,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
 
         {/* Settings Tab */}
         {activeTab === 'settings' && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
               <h3 className="text-lg font-semibold text-white mb-4">Modifica Credenziali Admin</h3>
               <form onSubmit={handleUpdateCredentials} className="space-y-6">
@@ -1986,6 +2056,88 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
               <div className="mt-6 p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-xl">
                 <p className="text-yellow-300 text-sm">
                   <strong>Attenzione:</strong> Dopo aver modificato le credenziali, dovrai utilizzare la nuova email e password per accedere al pannello admin.
+                </p>
+              </div>
+            </div>
+
+            {/* Secret Code Settings */}
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Modifica Codice Segreto</h3>
+              
+              <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-xl">
+                <p className="text-yellow-300 text-sm">
+                  <strong>Attenzione:</strong> Il codice segreto è utilizzato per accedere al pannello admin tramite triplo click sul logo.
+                </p>
+              </div>
+              
+              <form onSubmit={handleUpdateSecretCode} className="space-y-6">
+                {/* Campo nascosto per il token CSRF */}
+                <input type="hidden" name="csrf_token" value={csrfToken} />
+                
+                <div>
+                  <label className="block text-gray-300 text-sm font-medium mb-2">
+                    Codice Segreto Attuale *
+                  </label>
+                  <div className="relative">
+                    <Shield className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={secretCodeForm.currentSecretCode}
+                      onChange={(e) => setSecretCodeForm(prev => ({ ...prev, currentSecretCode: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-3 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Inserisci il codice segreto attuale"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 text-sm font-medium mb-2">
+                    Nuovo Codice Segreto *
+                  </label>
+                  <div className="relative">
+                    <Shield className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={secretCodeForm.newSecretCode}
+                      onChange={(e) => setSecretCodeForm(prev => ({ ...prev, newSecretCode: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-3 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Nuovo codice segreto (min. 4 caratteri)"
+                      required
+                      minLength={4}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 text-sm font-medium mb-2">
+                    Conferma Nuovo Codice Segreto *
+                  </label>
+                  <div className="relative">
+                    <Shield className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={secretCodeForm.confirmSecretCode}
+                      onChange={(e) => setSecretCodeForm(prev => ({ ...prev, confirmSecretCode: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-xl py-3 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Ripeti il nuovo codice segreto"
+                      required
+                      minLength={4}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
+                >
+                  Aggiorna Codice Segreto
+                </button>
+              </form>
+
+              <div className="mt-6 p-4 bg-purple-900/20 border border-purple-500/30 rounded-xl">
+                <p className="text-purple-300 text-sm">
+                  <strong>Nota:</strong> Il codice segreto viene utilizzato dai clienti per accedere al sistema di fidelizzazione. Assicurati di comunicare il nuovo codice ai tuoi clienti dopo averlo modificato.
                 </p>
               </div>
             </div>

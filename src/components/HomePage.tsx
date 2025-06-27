@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserPlus, LogIn, Award, TrendingUp, Instagram, X } from 'lucide-react';
 import { Customer, SecurityEventType } from '../types';
 import { LEVEL_CONFIGS, getUserLevel, getNextLevel, getPointsToNextLevel } from '../utils/levels';
-import firebaseService from '../utils/firebase';
+import * as firebaseService from '../utils/firebase';
 import { logSecurityEvent } from '../utils/securityLogger';
 
 interface HomePageProps {
@@ -53,6 +53,21 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logou
       logSecurityEvent(SecurityEventType.ADMIN_ACCESS_ATTEMPT, 'unknown', 'Triplo click sul logo - accesso segreto tentato');
     }
   };
+
+  // Carica il codice segreto da Firebase
+  useEffect(() => {
+    const loadSecretCode = async () => {
+      try {
+        const code = await firebaseService.getSecretCode();
+        setCurrentSecretCode(code);
+      } catch (error) {
+        console.error('Errore durante il caricamento del codice segreto:', error);
+        // Mantiene il fallback di default
+      }
+    };
+    
+    loadSecretCode();
+  }, []);
 
   // Gestione del form segreto
   const handleSecretSubmit = (e: React.FormEvent) => {
