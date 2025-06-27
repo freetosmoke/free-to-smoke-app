@@ -1,72 +1,113 @@
-import React from 'react';
-import { useState, useEffect } from 'react';
-import { UserPlus, LogIn, Shield, Instagram, Award, Gift, TrendingUp } from 'lucide-react';
-import { Customer, SecurityEventType } from '../types';
-import * as firebaseService from '../utils/firebase';
+import React, { useState, useEffect } from 'react';
+import { UserPlus, LogIn, Award, TrendingUp, Instagram, X } from 'lucide-react';
+import { Customer } from '../types';
 import { LEVEL_CONFIGS, getUserLevel, getNextLevel, getPointsToNextLevel } from '../utils/levels';
-import { setupSecurityProtections } from '../utils/security';
-import { isAuthenticated, getCurrentUserId, logout } from '../utils/auth';
-import { logSecurityEvent } from '../utils/securityLogger';
-import { useDebug } from '../utils/debugSystem';
+import firebaseService from '../utils/firebase';
+import { logSecurityEvent, SecurityEventType } from '../utils/securityLogger';
 
 interface HomePageProps {
   onNavigate: (page: string) => void;
+  loggedInCustomer: Customer | null;
+  logout: () => void;
+  setLoggedInCustomer: (customer: Customer | null) => void;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
-  const [loggedInCustomer, setLoggedInCustomer] = useState<Customer | null>(null);
-  const debug = useDebug('HomePage');
-  
+const HomePage: React.FC<HomePageProps> = ({ onNavigate, loggedInCustomer, logout, setLoggedInCustomer }) => {
+  const [logoClickCount, setLogoClickCount] = useState(0);
+  const [showSecretForm, setShowSecretForm] = useState(false);
+  const [secretCode, setSecretCode] = useState('');
+  const [secretError, setSecretError] = useState('');
+  // Rimuovi completamente qualsiasi dichiarazione di debug se presente
+
+  // Reset del contatore dopo 3 secondi
   useEffect(() => {
-    debug.info('HomePage inizializzata');
+    if (logoClickCount > 0) {
+      const timer = setTimeout(() => {
+        setLogoClickCount(0);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [logoClickCount]);
+
+  // Gestione del triplo click sul logo
+  const handleLogoClick = () => {
+    const newCount = logoClickCount + 1;
+    setLogoClickCount(newCount);
     
-    // Imposta le protezioni di sicurezza
-    debug.measurePerformance('setupSecurityProtections', () => {
-      setupSecurityProtections();
-    });
-    
-    // Controlla se c'è un utente loggato usando il sistema di autenticazione sicuro
+    if (newCount === 3) {
+      setShowSecretForm(true);
+      setLogoClickCount(0);
+      logSecurityEvent(SecurityEventType.ADMIN_ACCESS_ATTEMPT, 'unknown', 'Triplo click sul logo - accesso segreto tentato');
+    }
+  };
+
+  // Gestione del form segreto
+  const handleSecretSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (secretCode === 'FTS2025') {
+      logSecurityEvent(SecurityEventType.ADMIN_ACCESS_ATTEMPT, 'unknown', 'Codice segreto corretto - accesso admin autorizzato');
+      setShowSecretForm(false);
+      setSecretCode('');
+      setSecretError('');
+      onNavigate('adminLogin');
+    } else {
+      setSecretError('Codice non valido');
+      logSecurityEvent(SecurityEventType.ADMIN_ACCESS_ATTEMPT, 'unknown', `Codice segreto errato: ${secretCode}`);
+    }
+  };
+
+  useEffect(() => {
+    // Protezioni di sicurezza
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) {
+        e.preventDefault();
+        logSecurityEvent(SecurityEventType.SECURITY_VIOLATION, 'unknown', 'Tentativo di apertura DevTools');
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      logSecurityEvent(SecurityEventType.SECURITY_VIOLATION, 'unknown', 'Tentativo di click destro');
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, []);
+
+  useEffect(() => {
     const checkAuth = async () => {
-      debug.info('Controllo autenticazione in corso');
-      
-      const authenticated = await debug.measurePerformanceAsync('checkAuthentication', async () => {
-        return await isAuthenticated();
-      });
-      
-      if (authenticated) {
-        const userId = getCurrentUserId();
-        debug.info('Utente autenticato trovato', { userId });
-        
-        if (userId) {
-          try {
-            const customers = await debug.measurePerformanceAsync('loadCustomers', async () => {
-              return await firebaseService.getCustomers();
-            });
-            const customer = customers.find(c => c.id === userId);
-            if (customer) {
-              setLoggedInCustomer(customer);
-              // Registra l'accesso alla home page
-              logSecurityEvent(SecurityEventType.PAGE_ACCESS, userId, 'Accesso alla home page');
-            } else {
-              // Se l'utente non esiste più, effettua il logout
-              await logout();
-            }
-          } catch (error) {
-            console.error('Errore durante il recupero dei dati cliente:', error);
-            // In caso di errore, effettua il logout per sicurezza
+      if (loggedInCustomer) {
+        try {
+          const isValid = await firebaseService.validateCustomerSession(loggedInCustomer.id);
+          if (!isValid) {
+            console.log('Sessione non valida, effettuo logout');
             await logout();
           }
+        } catch (error) {
+          console.error('Errore durante la validazione della sessione:', error);
+          await logout();
         }
       }
     };
     
     checkAuth();
-  }, [debug]);
+  }, [loggedInCustomer, logout]); // Assicurati che queste dipendenze siano presenti
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Logo and Title with Action Buttons */}
       <div className="flex flex-col items-center justify-center pt-4 pb-2">
-        <img src="/Logo senza sfondo Free to smoke.png" alt="Free To Smoke Logo" className="h-40 mb-0" />
+        <img 
+          src="/Logo senza sfondo Free to smoke.png" 
+          alt="Free To Smoke Logo" 
+          className="h-40 mb-0 cursor-pointer transition-transform duration-200 hover:scale-105" 
+          onClick={handleLogoClick}
+        />
         <h1 className="text-4xl font-bold text-white mb-0 -mt-3">Free To Smoke</h1>
         <p className="text-xl text-gray-400 -mt-1">Fidelity Card</p>
         
@@ -123,6 +164,46 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         </div>
       </div>
 
+      {/* Secret Admin Access Modal */}
+      {showSecretForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded-lg max-w-sm w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-semibold">Accesso Riservato</h3>
+              <button
+                onClick={() => {
+                  setShowSecretForm(false);
+                  setSecretCode('');
+                  setSecretError('');
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSecretSubmit}>
+              <input
+                type="password"
+                value={secretCode}
+                onChange={(e) => setSecretCode(e.target.value)}
+                placeholder="Inserisci il codice"
+                className="w-full p-3 bg-gray-700 text-white rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+              {secretError && (
+                <p className="text-red-400 text-sm mb-3">{secretError}</p>
+              )}
+              <button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                Accedi
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="max-w-lg mx-auto px-4 space-y-4 mt-2">
         {/* Welcome Card */}
@@ -176,7 +257,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     )}
                   </div>
                 );
-              })()}
+              })()} 
             </div>
           ) : (
             <div>
@@ -201,28 +282,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                         </p>
                       </div>
                     ))}
-                  </div>
-                </div>
-                
-                {/* Premi Infiniti */}
-                <div className="bg-gradient-to-br from-gray-700/40 to-gray-800/40 rounded-xl p-4 shadow-md">
-                  <h3 className="text-white text-lg font-semibold mb-3 flex items-center justify-center">
-                    <Gift className="w-5 h-5 mr-2 text-green-400" />
-                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-teal-400">Premi Infiniti</span>
-                  </h3>
-                  <p className="text-gray-300 text-sm mb-3">
-                    Più punti accumuli, più premi esclusivi potrai sbloccare!
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-blue-900/30 rounded-lg p-2 transform transition-all duration-200 hover:scale-105 border border-blue-900/30">
-                      <p className="text-blue-300 text-sm font-semibold text-center">Accessori</p>
-                    </div>
-                    <div className="bg-green-900/30 rounded-lg p-2 transform transition-all duration-200 hover:scale-105 border border-green-900/30">
-                      <p className="text-green-300 text-sm font-semibold text-center">Sconti</p>
-                    </div>
-                    <div className="bg-purple-900/30 rounded-lg p-2 transform transition-all duration-200 hover:scale-105 border border-purple-900/30">
-                      <p className="text-purple-300 text-sm font-semibold text-center">Prodotti</p>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -250,21 +309,9 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         </a>
       </div>
       
-      {/* Footer - Migliorato con accesso admin */}
+      {/* Footer - Senza pulsante admin */}
       <div className="text-center mt-8 pb-6 bg-gradient-to-t from-black/30 to-transparent pt-4">
         <p className="text-gray-400 text-sm font-medium">© 2025 Free To Smoke - Fidelity Card</p>
-        <div className="flex flex-col items-center mt-2">
-          <button
-            onClick={() => {
-              onNavigate('adminLogin');
-              logSecurityEvent(SecurityEventType.ADMIN_ACCESS_ATTEMPT, 'unknown', 'Tentativo di accesso all\'area admin dalla home page');
-            }}
-            className="text-gray-500 hover:text-gray-300 text-xs flex items-center justify-center mt-3 transition-colors duration-300 bg-transparent"
-          >
-            <Shield className="w-3 h-3 mr-1 opacity-70" />
-            <span>Area Admin</span>
-          </button>
-        </div>
       </div>
     </div>
   );

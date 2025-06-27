@@ -24,6 +24,7 @@ type Page = 'home' | 'register' | 'login' | 'profile' | 'admin' | 'adminLogin';
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [currentCustomer, setCurrentCustomer] = useState<Customer | null>(null);
+  const [loggedInCustomer, setLoggedInCustomer] = useState<Customer | null>(null);
   const debug = useDebug('App');
 
   // Log dell'inizializzazione dell'app
@@ -36,20 +37,37 @@ function App() {
     
     if (page === 'profile' && data) {
       setCurrentCustomer(data as Customer);
+      setLoggedInCustomer(data as Customer);
       setCurrentPage('profile');
       debug.info('Navigazione al profilo cliente', { customerId: (data as Customer).id });
     } else {
       // Per qualsiasi altra pagina, resetta currentCustomer
-      setCurrentCustomer(null);
+      if (page !== 'home') {
+        setCurrentCustomer(null);
+      }
       setCurrentPage(page as Page);
       debug.info('Navigazione completata', { newPage: page });
     }
   };
 
+  const handleLogout = () => {
+    setLoggedInCustomer(null);
+    setCurrentCustomer(null);
+    setCurrentPage('home');
+    debug.info('Logout effettuato');
+  };
+
   const renderPage = () => {
     switch (currentPage) {
       case 'home':
-        return <HomePage onNavigate={handleNavigate} />;
+        return (
+          <HomePage 
+            onNavigate={handleNavigate} 
+            loggedInCustomer={loggedInCustomer}
+            logout={handleLogout}
+            setLoggedInCustomer={setLoggedInCustomer}
+          />
+        );
       case 'register':
         return <Registration onNavigate={handleNavigate} />;
       case 'login':
@@ -60,7 +78,12 @@ function App() {
             <CustomerProfile customer={currentCustomer} onNavigate={handleNavigate} />
           </Suspense>
         ) : (
-          <HomePage onNavigate={handleNavigate} />
+          <HomePage 
+            onNavigate={handleNavigate} 
+            loggedInCustomer={loggedInCustomer}
+            logout={handleLogout}
+            setLoggedInCustomer={setLoggedInCustomer}
+          />
         );
       case 'admin':
         return (
@@ -75,7 +98,14 @@ function App() {
           </Suspense>
         );
       default:
-        return <HomePage onNavigate={handleNavigate} />;
+        return (
+          <HomePage 
+            onNavigate={handleNavigate} 
+            loggedInCustomer={loggedInCustomer}
+            logout={handleLogout}
+            setLoggedInCustomer={setLoggedInCustomer}
+          />
+        );
     }
   }
 
